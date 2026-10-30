@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#e8d7be" />
+  <title>泥火之间 2.0 · 360° 双手陶艺工坊</title>
+  <link rel="stylesheet" href="./studio.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">泥</div>
+        <div>
+          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.0</p>
+          <h1>泥火之间 <span>360°</span></h1>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div class="live-pill" id="topHandStatus"><i></i><span>摄像头未开启</span></div>
+        <button class="ghost-btn" id="presentationBtn" type="button" title="课堂投屏">投屏</button>
+        <button class="ghost-btn" id="resetBtn" type="button" title="重新开始">↻ 重新开始</button>
+        <button class="save-btn" id="exportBtn" type="button" disabled>↓ 保存成品</button>
+      </div>
+    </header>
+
+    <nav class="phasebar" aria-label="制陶步骤">
+      <button class="phase active" data-phase="clay" type="button"><b>01</b><span>准备泥料</span><small>揉泥 · 选泥</small></button>
+      <button class="phase" data-phase="sculpt" type="button"><b>02</b><span>双手手捏</span><small>360° 自由塑形</small></button>
+      <button class="phase" data-phase="dry" type="button"><b>03</b><span>修边干燥</span><small>平滑 · 定型</small></button>
+      <button class="phase" data-phase="bisque" type="button"><b>04</b><span>素烧</span><small>840°C</small></button>
+      <button class="phase" data-phase="decorate" type="button"><b>05</b><span>上釉彩绘</span><small>填色 · 手绘 · 贴花</small></button>
+      <button class="phase" data-phase="fire" type="button"><b>06</b><span>温控本烧</span><small>900—1280°C</small></button>
+    </nav>
+
+    <section class="workspace">
+      <aside class="left-column">
+        <section class="camera-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">DUAL-HAND INPUT</p>
+              <h2>双手协同</h2>
+            </div>
+            <span class="camera-badge" id="cameraBadge">关闭</span>
+          </div>
+          <div class="camera-view" id="cameraView">
+            <video id="cameraVideo" playsinline muted></video>
+            <canvas id="handOverlay"></canvas>
+            <span class="mirror-badge">镜像操作</span>
+            <div class="camera-placeholder" id="cameraPlaceholder">
+              <span>双手</span>
+              <strong>同时握住泥团</strong>
+              <p>开启摄像头后，两只手会同时改变坯体。只出现一只手时不会切换模式。</p>
+            </div>
+            <div class="camera-reticle" aria-hidden="true"></div>
+          </div>
+          <p class="hand-message" id="handMessage">把双手一起放进画面，掌心朝向镜头。</p>
+          <div class="camera-device-row">
+            <select id="cameraSelect" aria-label="选择摄像头"><option value="">默认摄像头</option></select>
+            <button class="mini-btn" id="refreshCameraBtn" type="button">刷新</button>
+          </div>
+          <div class="camera-actions">
+            <button class="soft-btn" id="cameraBtn" type="button">开启摄像头</button>
+            <button class="soft-btn" id="demoHandsBtn" type="button">双手演示</button>
+          </div>
+        </section>
+
+        <section class="mini-card">
+          <div class="card-head compact">
+            <div>
+              <p class="eyebrow">CLAY MATERIAL</p>
+              <h3>泥料</h3>
+            </div>
+            <span class="tiny-note">5 种</span>
+          </div>
+          <div class="clay-options" id="clayOptions"></div>
+          <div class="wheel-control">
+            <div>
+              <strong>转盘电源</strong>
+              <small id="wheelPowerText">关闭 · 点击启动</small>
+            </div>
+            <button class="power-switch" id="wheelPowerBtn" type="button" aria-pressed="false"><i></i><span>OFF</span></button>
+          </div>
+        </section>
+
+        <section class="mini-card reference-card">
+          <div class="card-head compact">
+            <div>
+              <p class="eyebrow">SHAPE START</p>
+              <h3>自由器型与灵感</h3>
+            </div>
+            <span class="tiny-note">不锁定器型</span>
+          </div>
+          <div class="sample-grid" id="sampleGrid"></div>
+        </section>
+      </aside>
+
+      <section class="studio-stage">
+        <div class="stage-heading">
+          <div>
+            <p class="eyebrow" id="stageEyebrow">STEP 01 / 06</p>
+            <h2 id="stageTitle">准备泥料</h2>
+            <p id="stageCopy">选择泥料，打开转盘电源，再揉匀泥团。</p>
+          </div>
+          <div class="view-modes" id="viewModes">
+            <button class="active" data-tool="sculpt" type="button">双手捏制</button>
+            <button data-tool="rotate" type="button">360° 旋转</button>
+          </div>
+        </div>
+
+        <div class="clay-stage-shell" id="clayStageShell">
+          <div class="studio-light" aria-hidden="true"></div>
+          <div class="turntable-orbit" aria-hidden="true"><i></i></div>
+          <canvas id="potteryCanvas" aria-label="360度陶器预览"></canvas>
+          <div class="wheel-base" aria-hidden="true"></div>
+          <div class="power-floating" id="powerFloating"><i></i><span>转盘关闭</span></div>
+          <div class="angle-pill" id="anglePill">拖动旋转 · 0°</div>
+        </div>
+
+        <div class="stage-message" id="stageMessage">打开转盘电源，然后按住泥团揉压，或开启双手摄像头。</div>
+        <div class="stage-actions">
+          <button class="soft-btn small" id="undoBtn" type="button" disabled>↶ 撤销</button>
+          <button class="soft-btn small" id="smoothBtn" type="button" hidden>✦ 一键修饰边缘</button>
+          <button class="soft-btn small" id="centerViewBtn" type="button">正视视角</button>
+          <button class="soft-btn small" id="topViewBtn" type="button">俯视检查</button>
+          <span class="triple-note">左右环绕 · 上下俯仰</span>
+        </div>
+      </section>
+
+      <aside class="control-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow" id="panelEyebrow">STEP 01 / 06</p>
+            <h2 id="panelTitle">准备泥料</h2>
+          </div>
+          <span class="panel-badge" id="panelBadge">白瓷泥</span>
+        </div>
+        <div class="panel-content" id="panelContent"></div>
+      </aside>
+    </section>
+
+    <footer class="footer">
+      <span>泥火之间 · 双手手作 · 360° 立体坯体</span>
+      <span id="footerStatus">先打开转盘电源，再揉匀泥团</span>
+    </footer>
+  </main>
+
+  <div class="modal" id="kilnModal" hidden>
+    <div class="modal-card kiln-card">
+      <button class="modal-close" id="closeModalBtn" type="button" aria-label="关闭">×</button>
+      <div class="kiln-view" id="kilnView">
+        <p class="eyebrow" id="kilnKicker">BISQUE FIRING · 840°C</p>
+        <h2 id="kilnTitle">素烧定型</h2>
+        <div class="kiln-window">
+          <span class="flame flame-a"></span><span class="flame flame-b"></span><span class="flame flame-c"></span>
+          <div class="kiln-pot" id="kilnPot"></div>
+        </div>
+        <div class="kiln-temp"><strong id="kilnTemp">20</strong><small>°C</small></div>
+        <p class="kiln-status" id="kilnStatus">窑温正在缓慢升高</p>
+        <div class="kiln-track"><span id="kilnProgress"></span></div>
+      </div>
+      <div class="result-view" id="resultView" hidden>
+        <p class="eyebrow">YOUR CERAMIC IS READY</p>
+        <h2>作品出炉了</h2>
+        <p class="result-copy" id="resultCopy">一件真正可以从正面、侧面和背面欣赏的手作陶器。</p>
+        <div class="result-art" id="resultArt"></div>
+        <div class="result-specs" id="resultSpecs"></div>
+        <div class="result-actions">
+          <button class="soft-btn" id="restartBtn" type="button">再做一个</button>
+          <button class="save-btn" id="saveResultBtn" type="button">保存 PNG</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./studio-data.js"></script>
+  <script src="./studio-3d.js"></script>
+  <script src="./studio-hand.js"></script>
+  <script src="./studio-app.js"></script>
+</body>
+</html>
