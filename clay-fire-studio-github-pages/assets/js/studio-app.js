@@ -16,6 +16,13 @@
     handles: 0
   };
   const phaseOrder = ['clay', 'sculpt', 'dry', 'bisque', 'decorate', 'fire'];
+  const HAND_CONNECTIONS = [
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [5, 9], [9, 10], [10, 11], [11, 12],
+    [9, 13], [13, 14], [14, 15], [15, 16],
+    [13, 17], [17, 18], [18, 19], [19, 20], [0, 17]
+  ];
 
   const els = {
     topHandStatus: $('topHandStatus'),
@@ -27,6 +34,16 @@
     handMessage: $('handMessage'),
     cameraBtn: $('cameraBtn'),
     demoHandsBtn: $('demoHandsBtn'),
+    cameraTogglePanelBtn: $('cameraTogglePanelBtn'),
+    cameraBody: $('cameraBody'),
+    calibrateHandsBtn: $('calibrateHandsBtn'),
+    handDiagnosticsBtn: $('handDiagnosticsBtn'),
+    calibrationStatus: $('calibrationStatus'),
+    handDiagnostics: $('handDiagnostics'),
+    diagFps: document.querySelector('[data-diag-fps]'),
+    diagHands: document.querySelector('[data-diag-hands]'),
+    diagPinch: document.querySelector('[data-diag-pinch]'),
+    diagLatency: document.querySelector('[data-diag-latency]'),
     cameraSelect: $('cameraSelect'),
     refreshCameraBtn: $('refreshCameraBtn'),
     clayOptions: $('clayOptions'),
@@ -34,6 +51,7 @@
     wheelPowerText: $('wheelPowerText'),
     sampleGrid: $('sampleGrid'),
     clayStageShell: $('clayStageShell'),
+    clayHandOverlay: $('clayHandOverlay'),
     studioStage: document.querySelector('.studio-stage'),
     stageEyebrow: $('stageEyebrow'),
     stageTitle: $('stageTitle'),
@@ -48,9 +66,30 @@
     anglePill: $('anglePill'),
     smoothBtn: $('smoothBtn'),
     undoBtn: $('undoBtn'),
+    redoBtn: $('redoBtn'),
     centerViewBtn: $('centerViewBtn'),
+    quarterViewBtn: $('quarterViewBtn'),
     topViewBtn: $('topViewBtn'),
+    contactFeedback: $('contactFeedback'),
+    contactRing: $('contactRing'),
+    handHintLeft: $('handHintLeft'),
+    handHintRight: $('handHintRight'),
+    contactLabel: $('contactLabel'),
+    materialsToggleBtn: $('materialsToggleBtn'),
+    panelToggleBtn: $('panelToggleBtn'),
+    quickWheelBtn: $('quickWheelBtn'),
+    quickWheelText: $('quickWheelText'),
+    dockPanelText: $('dockPanelText'),
+    leftDrawerCloseBtn: $('leftDrawerCloseBtn'),
+    panelCloseBtn: $('panelCloseBtn'),
+    orderInitial: $('orderInitial'),
+    orderKicker: $('orderKicker'),
+    orderTitle: $('orderTitle'),
+    orderCopy: $('orderCopy'),
+    orderReward: $('orderReward'),
+    orderChecks: $('orderChecks'),
     presentationBtn: $('presentationBtn'),
+    backPhaseBtn: $('backPhaseBtn'),
     resetBtn: $('resetBtn'),
     exportBtn: $('exportBtn'),
     footerStatus: $('footerStatus'),
@@ -68,32 +107,46 @@
     resultCopy: $('resultCopy'),
     resultArt: $('resultArt'),
     resultSpecs: $('resultSpecs'),
+    resultOrder: $('resultOrder'),
+    resultAnglePicker: $('resultAnglePicker'),
     restartBtn: $('restartBtn'),
+    nextOrderBtn: $('nextOrderBtn'),
     saveResultBtn: $('saveResultBtn')
   };
 
   function makeRawProfile() {
     return Array.from({ length: 48 }, (_, i) => {
       const t = i / 47;
-      return 0.5 + Math.sin(t * Math.PI) * 0.52 + t * t * 0.16;
+      const roundMass = 0.08 + Math.pow(Math.sin(t * Math.PI), 0.72) * 0.86;
+      return roundMass + Math.sin(i * 1.63) * 0.018;
     });
   }
 
-  function makeCustomProfile() {
-    return D.expandProfile(customSample);
+  function makeThrowProfile() {
+    return Array.from({ length: 96 }, (_, index) => {
+      const t = index / 95;
+      const cylinder = .61 + Math.sin(t * Math.PI) * .035 + t * .018;
+      return cylinder + Math.sin(index * 1.73) * .006;
+    });
   }
 
   function initialState() {
     return {
       phase: 'clay',
       wheelOn: false,
+      wheelSpeed: 1,
+      pinchForce: 1,
       cameraOn: false,
       demoOn: false,
+      currentOrderId: (D.CUSTOMER_ORDERS && D.CUSTOMER_ORDERS[0] ? D.CUSTOMER_ORDERS[0].id : 'bookshop-window'),
       clayId: 'white',
       knead: 0,
       rawProfile: makeRawProfile(),
       sampleId: 'custom',
-      profile: makeCustomProfile(),
+      profile: makeThrowProfile(),
+      heightFactor: .62,
+      shapeWork: 0,
+      throwProgress: 0,
       lumps: [],
       handleCount: 0,
       mouth: { diameter: 1, rim: 0.14, depth: 0.34, style: 'round' },
@@ -105,6 +158,8 @@
       glaze: { body: null, rim: null, inside: null, foot: null },
       selectedRegion: 'body',
       selectedColorId: 'celadon',
+      selectedGlazePresetId: 'celadon-clear',
+      glazeCategory: '全部',
       colorGroup: '常用色',
       decorMode: 'fill',
       brushSize: 11,
@@ -122,8 +177,10 @@
       temperature: 1240,
       atmosphere: 'oxidation',
       firedFinishId: 'soft',
+      exportAngle: 'side',
       finalized: false,
-      history: []
+      history: [],
+      redoHistory: []
     };
   }
 
@@ -132,8 +189,11 @@
   let demoInterval = null;
   let lastHandAt = 0;
   let lastHandData = null;
+  let pinchWasActive = false;
+  let lastActivePinch = null;
+  let handActionFeedback = { text: '', until: 0 };
   let handDeformCooldown = 0;
-  let lastHistoryAt = 0;
+  let resultExportCache = { angle: null, dataUrl: '' };
   let firingTimer = null;
   let firingTimeout = null;
   let firingActive = false;
@@ -148,6 +208,21 @@
 
   function clay() { return findClay(state.clayId); }
   function selectedColor() { return findColor(state.selectedColorId); }
+  function selectedGlazePreset() {
+    return D.GLAZE_PRESETS.find(preset => preset.id === state.selectedGlazePresetId) || null;
+  }
+  function selectedGlazePaint() {
+    const preset = selectedGlazePreset();
+    if (!preset) return selectedColor();
+    return {
+      id: 'preset-' + preset.id,
+      name: preset.name,
+      hex: preset.primary,
+      secondary: preset.secondary,
+      pattern: preset.pattern,
+      presetId: preset.id
+    };
+  }
   function selectedStampColor() { return findColor(state.stampColorId); }
   function pieceName() {
     return state.sampleId === 'custom' ? customSample.name : (D.PROFILE_SAMPLES[state.sampleId] || customSample).name;
@@ -160,16 +235,20 @@
     return {
       rawClay: state.phase === 'clay',
       profile: state.phase === 'clay' ? state.rawProfile : state.profile,
+      heightFactor: state.phase === 'clay' ? 1 : state.heightFactor,
+      throwProgress: state.phase === 'clay' ? 0 : throwPercent(),
       lumps: state.lumps,
       clay: clay(),
       glaze: state.glaze,
       finish: currentFinish(),
       gloss: state.gloss,
-      texture: state.texture,
+      texture: state.phase === 'clay' || (state.phase === 'sculpt' && throwPercent() < 35) ? 'smooth' : state.texture,
       mouth: state.mouth,
       handleCount: state.phase === 'clay' ? 0 : state.handleCount,
       bisqueDone: state.bisqueDone,
       phase: state.phase,
+      wheelOn: state.wheelOn,
+      wheelSpeed: state.wheelSpeed,
       finalized: state.finalized,
       fireTemperature: state.temperature,
       atmosphere: state.atmosphere
@@ -180,6 +259,262 @@
     renderer.setState(rendererState());
   }
 
+  function throwPercent() {
+    const heightProgress = clamp((state.heightFactor - .62) / .4, 0, 1);
+    return Math.round(Math.max(heightProgress, state.shapeWork || 0) * 100);
+  }
+
+  function surfaceRegion(v) {
+    if (v < .24) return '口沿';
+    if (v < .52) return '器肩';
+    if (v < .8) return '器腹';
+    return '底足';
+  }
+
+  function setContactVisible(visible) {
+    if (!els.contactFeedback) return;
+    els.contactFeedback.classList.toggle('visible', visible);
+    if (!visible) {
+      els.contactFeedback.classList.remove('pinching');
+      clearClayHandOverlay();
+    }
+  }
+
+  function pulseContact() {
+    if (!els.contactRing || typeof els.contactRing.animate !== 'function') return;
+    els.contactRing.animate(
+      [
+        { transform: 'translate(-50%,-50%) scale(1.32)', opacity: .55 },
+        { transform: 'translate(-50%,-50%) scale(1)', opacity: 1 }
+      ],
+      { duration: 190, easing: 'ease-out' }
+    );
+    if (navigator.vibrate) navigator.vibrate(12);
+  }
+
+  function rememberHandAction(text) {
+    handActionFeedback = { text, until: performance.now() + 1800 };
+    els.handMessage.textContent = text;
+  }
+
+  function activeHandActionText() {
+    return performance.now() < handActionFeedback.until ? handActionFeedback.text : '';
+  }
+
+  function resizeClayHandOverlay() {
+    if (!els.clayHandOverlay) return null;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = els.clayHandOverlay.clientWidth;
+    const height = els.clayHandOverlay.clientHeight;
+    const pixelWidth = Math.max(1, Math.round(width * dpr));
+    const pixelHeight = Math.max(1, Math.round(height * dpr));
+    if (els.clayHandOverlay.width !== pixelWidth || els.clayHandOverlay.height !== pixelHeight) {
+      els.clayHandOverlay.width = pixelWidth;
+      els.clayHandOverlay.height = pixelHeight;
+    }
+    const context = els.clayHandOverlay.getContext('2d');
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { context, width, height };
+  }
+
+  function clearClayHandOverlay() {
+    if (!els.clayHandOverlay) return;
+    const context = els.clayHandOverlay.getContext('2d');
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, els.clayHandOverlay.width, els.clayHandOverlay.height);
+  }
+
+  function drawClayHandSkeleton(hands, pinching) {
+    const surface = resizeClayHandOverlay();
+    if (!surface) return;
+    const { context, width, height } = surface;
+    context.clearRect(0, 0, width, height);
+    if (!hands || !hands.length) return;
+    const canvasWidth = els.potteryCanvas.clientWidth;
+    const canvasHeight = els.potteryCanvas.clientHeight;
+    const scale = Math.min(width, height) * .82;
+    const visibleOnPottery = point => renderer.screenPointToUv(point.x, point.y).hit;
+    const fitPointToSurface = (anchor, candidate) => {
+      if (visibleOnPottery(candidate)) return candidate;
+      let inside = 0;
+      let outside = 1;
+      for (let step = 0; step < 5; step += 1) {
+        const middle = (inside + outside) * .5;
+        const point = {
+          x: anchor.x + (candidate.x - anchor.x) * middle,
+          y: anchor.y + (candidate.y - anchor.y) * middle
+        };
+        if (visibleOnPottery(point)) inside = middle;
+        else outside = middle;
+      }
+      return {
+        x: anchor.x + (candidate.x - anchor.x) * inside,
+        y: anchor.y + (candidate.y - anchor.y) * inside
+      };
+    };
+
+    hands.forEach((hand, handIndex) => {
+      if (!hand.landmarks || hand.landmarks.length < 21) return;
+      const uv = renderer.screenPointToUv(hand.x * canvasWidth, hand.y * canvasHeight);
+      if (!uv.hit) return;
+      const contact = renderer.uvToScreen(uv.u, uv.v);
+      if (!contact) return;
+      const surfaceAnchor = {
+        x: contact.x + clamp((width * .5 - contact.x) * .2, -24, 24),
+        y: contact.y
+      };
+      const points = hand.landmarks.map(point => fitPointToSurface(surfaceAnchor, {
+        x: surfaceAnchor.x + (point.x - hand.x) * scale,
+        y: surfaceAnchor.y + (point.y - hand.y) * scale
+      }));
+
+      context.save();
+      context.globalAlpha = pinching ? 1 : .58;
+      context.strokeStyle = handIndex === 0 ? 'rgba(232,255,250,.99)' : 'rgba(246,255,236,.99)';
+      context.fillStyle = 'rgba(255,254,246,.99)';
+      context.lineWidth = pinching ? 2.7 : 1.8;
+      context.shadowColor = handIndex === 0 ? 'rgba(75,233,225,.96)' : 'rgba(130,235,190,.9)';
+      context.shadowBlur = pinching ? 14 : 8;
+      context.lineCap = 'round';
+      HAND_CONNECTIONS.forEach(([a, b]) => {
+        context.beginPath();
+        context.moveTo(points[a].x, points[a].y);
+        context.lineTo(points[b].x, points[b].y);
+        context.stroke();
+      });
+      points.forEach((point, pointIndex) => {
+        context.beginPath();
+        context.arc(point.x, point.y, pointIndex === 4 || pointIndex === 8 ? 3.1 : 1.6, 0, Math.PI * 2);
+        context.fill();
+      });
+      if (pinching) {
+        const pinchX = (points[4].x + points[8].x) * .5;
+        const pinchY = (points[4].y + points[8].y) * .5;
+        context.strokeStyle = 'rgba(255,215,139,.98)';
+        context.lineWidth = 2.6;
+        context.beginPath();
+        context.moveTo(points[4].x, points[4].y);
+        context.lineTo(points[8].x, points[8].y);
+        context.stroke();
+        context.fillStyle = 'rgba(255,247,225,.98)';
+        context.shadowColor = 'rgba(255,215,139,.92)';
+        context.shadowBlur = 20;
+        context.beginPath();
+        context.arc(pinchX, pinchY, 5, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.restore();
+    });
+  }
+
+  function placeContact(points, primary, detail, pinching) {
+    if (!els.contactFeedback || !els.contactRing || !els.contactLabel) return;
+    const canvasRect = els.potteryCanvas.getBoundingClientRect();
+    const shellRect = els.clayStageShell.getBoundingClientRect();
+    const offsetX = canvasRect.left - shellRect.left;
+    const offsetY = canvasRect.top - shellRect.top;
+    const usable = points.filter(point => point && Number.isFinite(point.x) && Number.isFinite(point.y));
+    if (!usable.length || !primary) {
+      setContactVisible(false);
+      return;
+    }
+
+    els.contactRing.style.left = (offsetX + primary.x) + 'px';
+    els.contactRing.style.top = (offsetY + primary.y) + 'px';
+    const left = usable[0];
+    const right = usable[1] || usable[0];
+    els.handHintLeft.style.left = (offsetX + left.x) + 'px';
+    els.handHintLeft.style.top = (offsetY + left.y) + 'px';
+    els.handHintRight.style.left = (offsetX + right.x) + 'px';
+    els.handHintRight.style.top = (offsetY + right.y) + 'px';
+    els.handHintRight.hidden = usable.length < 2;
+    els.contactLabel.style.left = clamp(offsetX + primary.x, 8, shellRect.width - 155) + 'px';
+    els.contactLabel.style.top = clamp(offsetY + primary.y, 8, shellRect.height - 58) + 'px';
+    els.contactLabel.querySelector('strong').textContent = surfaceRegion(primary.v) + ' · ' + (primary.side || '左侧');
+    els.contactLabel.querySelector('small').textContent = detail;
+    els.contactFeedback.classList.toggle('pinching', !!pinching);
+    setContactVisible(true);
+  }
+
+  function updateContactFromUv(uv, detail, pinching) {
+    clearClayHandOverlay();
+    if (!uv || uv.hit === false) {
+      setContactVisible(false);
+      return;
+    }
+    const point = renderer.uvToScreen(uv.u, uv.v);
+    if (!point) return;
+    placeContact(
+      [{ ...point, v: uv.v, side: uv.x < els.potteryCanvas.clientWidth * .5 ? '左侧' : '右侧' }],
+      { ...point, v: uv.v, side: uv.x < els.potteryCanvas.clientWidth * .5 ? '左侧' : '右侧' },
+      detail,
+      pinching
+    );
+  }
+
+  function updateContactFromHands(data, strength) {
+    const points = data.hands.map(hand => {
+      const uv = renderer.screenPointToUv(
+        hand.x * els.potteryCanvas.clientWidth,
+        hand.y * els.potteryCanvas.clientHeight
+      );
+      return uv.hit ? { ...uv, side: hand.x < .5 ? '左侧' : '右侧' } : null;
+    }).filter(Boolean);
+    if (!points.length) {
+      setContactVisible(false);
+      return;
+    }
+    const primary = points[0];
+    const pressure = Math.round(clamp(Math.abs(strength) * 220, 8, 100));
+    const handText = points.length === 2 ? '双手同步' : '单手操作';
+    const gestureText = activeHandActionText() || (data.pinchSupported
+      ? (data.pinching ? handText + ' · 捏合中' : handText + ' · 松开预览')
+      : handText + ' · 基础追踪');
+    drawClayHandSkeleton(data.hands, !!data.pinching);
+    placeContact(points, primary, gestureText + ' · 压力 ' + pressure + '%', !!data.pinching);
+  }
+
+  function setWorkshopDrawer(openDrawer) {
+    if (openDrawer) setCameraPanelExpanded(false);
+    document.body.classList.toggle('materials-open', openDrawer === 'materials');
+    document.body.classList.toggle('panel-open', openDrawer === 'panel');
+    els.materialsToggleBtn.setAttribute('aria-expanded', String(openDrawer === 'materials'));
+    els.panelToggleBtn.setAttribute('aria-expanded', String(openDrawer === 'panel'));
+  }
+
+  function closeWorkshopDrawers() {
+    setWorkshopDrawer(null);
+  }
+
+  function setViewMode(mode) {
+    const views = {
+      center: [-.36, .08],
+      quarter: [-.36, .48],
+      top: [-.36, 1.18]
+    };
+    const view = views[mode] || views.quarter;
+    renderer.setView(view[0], view[1]);
+    [els.centerViewBtn, els.quarterViewBtn, els.topViewBtn].forEach(button => {
+      if (button) button.classList.toggle('active', button.id === mode + 'ViewBtn');
+    });
+    const labels = { center: '已回到正视', quarter: '已切换到 3/4 视角', top: '已切换到俯视，可检查口沿与内壁' };
+    toast(labels[mode] || labels.quarter);
+  }
+
+  function updateSculptProgressUi() {
+    const bar = $('formProgressBar');
+    const text = $('formProgressText');
+    const height = $('formHeightText');
+    const percent = throwPercent();
+    state.throwProgress = percent;
+    if (bar) bar.style.width = percent + '%';
+    if (text) text.textContent = percent + '%';
+    if (height) height.textContent = (Math.round(state.heightFactor * 100) / 100).toFixed(2) + '×';
+    const goDry = els.panelContent.querySelector('[data-action="go-dry"]');
+    if (goDry) goDry.disabled = false;
+    updateOrderCard();
+  }
+
   function toast(message) {
     els.footerStatus.textContent = message;
     els.footerStatus.animate(
@@ -188,39 +523,141 @@
     );
   }
 
-  function pushHistory() {
+  function snapshotEditableState(label) {
     const snapshot = {
+      label: label || '编辑',
       profile: state.profile.slice(),
+      rawProfile: state.rawProfile.slice(),
       lumps: state.lumps.map(l => ({ ...l })),
-      smooth: state.edgeSmoothed
+      heightFactor: state.heightFactor,
+      shapeWork: state.shapeWork,
+      knead: state.knead,
+      smooth: state.edgeSmoothed,
+      glaze: Object.fromEntries(Object.entries(state.glaze).map(([region, color]) => [
+        region,
+        color ? { ...color } : null
+      ])),
+      finishId: state.finishId,
+      gloss: state.gloss,
+      texture: state.texture,
+      hasArtwork: state.hasArtwork,
+      surfaceArtwork: state.surfaceArtwork,
+      freeArtwork: state.freeArtwork,
+      artwork: renderer.captureHistoryState()
     };
+    return snapshot;
+  }
+
+  function updateHistoryButtons() {
+    els.undoBtn.disabled = state.history.length === 0;
+    els.redoBtn.disabled = state.redoHistory.length === 0;
+    const undoItem = state.history[state.history.length - 1];
+    const redoItem = state.redoHistory[state.redoHistory.length - 1];
+    els.undoBtn.textContent = undoItem ? '↶ 撤销' + undoItem.label : '↶ 撤销';
+    els.redoBtn.textContent = redoItem ? '↷ 重做' + redoItem.label : '↷ 重做';
+    els.undoBtn.title = undoItem ? '撤销：' + undoItem.label : '没有可撤销的操作';
+    els.redoBtn.title = redoItem ? '重做：' + redoItem.label : '没有可重做的操作';
+  }
+
+  function pushHistory(label) {
+    const snapshot = snapshotEditableState(label);
     state.history.push(snapshot);
-    if (state.history.length > 30) state.history.shift();
-    els.undoBtn.disabled = false;
+    if (state.history.length > 50) state.history.shift();
+    state.redoHistory = [];
+    updateHistoryButtons();
+  }
+
+  function restoreEditableState(snapshot) {
+    state.profile = snapshot.profile.slice();
+    state.rawProfile = snapshot.rawProfile.slice();
+    state.lumps = snapshot.lumps.map(l => ({ ...l }));
+    state.heightFactor = snapshot.heightFactor;
+    state.shapeWork = snapshot.shapeWork || 0;
+    state.throwProgress = throwPercent();
+    state.knead = snapshot.knead;
+    state.edgeSmoothed = snapshot.smooth;
+    state.glaze = Object.fromEntries(Object.entries(snapshot.glaze).map(([region, color]) => [
+      region,
+      color ? { ...color } : null
+    ]));
+    state.finishId = snapshot.finishId;
+    state.gloss = snapshot.gloss;
+    state.texture = snapshot.texture;
+    state.hasArtwork = snapshot.hasArtwork;
+    state.surfaceArtwork = snapshot.surfaceArtwork;
+    state.freeArtwork = snapshot.freeArtwork;
+    renderer.restoreHistoryState(snapshot.artwork);
+    syncRenderer();
+    updateHistoryButtons();
   }
 
   function undo() {
     const previous = state.history.pop();
     if (!previous) return;
-    state.profile = previous.profile;
-    state.lumps = previous.lumps;
-    state.edgeSmoothed = previous.smooth;
-    els.undoBtn.disabled = state.history.length === 0;
+    state.redoHistory.push(snapshotEditableState(previous.label));
+    restoreEditableState(previous);
+    renderAll();
+    toast('已撤销：' + previous.label);
+  }
+
+  function redo() {
+    const next = state.redoHistory.pop();
+    if (!next) return;
+    state.history.push(snapshotEditableState(next.label));
+    restoreEditableState(next);
+    renderAll();
+    toast('已重做：' + next.label);
+  }
+
+  function clearHistory() {
+    state.history = [];
+    state.redoHistory = [];
     syncRenderer();
-    renderPanel();
-    toast('已撤销上一步塑形');
+    updateHistoryButtons();
   }
 
   function phaseMeta() {
     const map = {
-      clay: ['STEP 01 / 06', '准备泥料', '选择泥料，打开转盘电源，再揉匀泥团。', '打开转盘电源，用双手揉压泥团；也可以使用鼠标。'],
-      sculpt: ['STEP 02 / 06', '双手自由手捏', '两只手会同时改变同一件坯体，拖动画面可旋转 360° 查看。', '选择“双手捏制”后按住坯体，或开启摄像头让双手同步塑形。'],
+      clay: ['STEP 01 / 06', '准备泥料', '选择泥料，打开转盘电源，再揉匀泥团。', '打开转盘电源，用单手或双手揉压泥团；也可以使用鼠标。'],
+      sculpt: ['STEP 02 / 06', '自由手捏', '手掌在画面中的位置保持稳定，陶坯从手下缓慢旋转经过；捏合开始塑形，松开停止。', '选择“手部塑形”后捏合拇指与食指，或使用鼠标拖拽。'],
       dry: ['STEP 03 / 06', '修边与自然干燥', '先把粗糙口沿修顺，再让坯体慢慢干燥。', '点击一键修饰边缘，确认轮廓后进入自然干燥。'],
       bisque: ['STEP 04 / 06', '低温素烧', '素烧让泥坯变硬，并让釉层更容易附着。', '素烧后器型固定，不能再修改轮廓。'],
-      decorate: ['STEP 05 / 06', '上釉与彩绘', '选择全区域填色或自由绘画，再叠加贴花和纹理。', '拖动陶器可以从任意角度观察和绘制。'],
+      decorate: ['STEP 05 / 06', '上釉与彩绘', '拖动画笔上色；滚轮旋转器物，按住 Alt 拖动可查看并绘制背面。', '拖动绘制，滚轮或 Alt+拖动旋转，纹样会附着在完整器身表面。'],
       fire: ['STEP 06 / 06', '温控本烧', '选择烧成温度和窑内气氛，最终釉色会随之改变。', '高温会让釉色加深，并形成流动、开片与火痕。']
     };
     return map[state.phase];
+  }
+
+  function currentOrder() {
+    return D.CUSTOMER_ORDERS.find(order => order.id === state.currentOrderId) || D.CUSTOMER_ORDERS[0];
+  }
+
+  function orderCheckStatus() {
+    const order = currentOrder();
+    const bodyGlaze = state.glaze && state.glaze.body;
+    const preset = bodyGlaze && D.GLAZE_PRESETS.find(item => item.id === bodyGlaze.presetId);
+    const shapeDone = state.heightFactor >= order.minHeight;
+    const glazeDone = !!bodyGlaze && (!preset || order.glazeCategories.includes(preset.category));
+    const finishDone = order.finishIds.includes(state.finishId);
+    return [
+      { key: 'shape', label: '器型高度', done: shapeDone, detail: Math.round(clamp((state.heightFactor - .62) / .4, 0, 1) * 100) + '%' },
+      { key: 'glaze', label: '釉色方向', done: glazeDone, detail: preset ? preset.category : (bodyGlaze ? '自定义' : '未施釉') },
+      { key: 'finish', label: '釉面质感', done: finishDone, detail: findFinish(state.finishId).name }
+    ];
+  }
+
+  function updateOrderCard() {
+    const order = currentOrder();
+    const checks = orderCheckStatus();
+    els.orderInitial.textContent = order.customer.slice(0, 1);
+    els.orderKicker.textContent = order.customer + '的委托 · ' + order.day;
+    els.orderTitle.textContent = order.title;
+    els.orderCopy.textContent = order.brief;
+    els.orderReward.textContent = '灵感 +' + order.reward;
+    els.orderChecks.innerHTML = checks.map(check => (
+      '<span class="' + (check.done ? 'done' : '') + '"><b>' + (check.done ? '✓' : '○') + '</b>' +
+      check.label + ' · ' + check.detail + '</span>'
+    )).join('');
   }
 
   function renderAll() {
@@ -233,15 +670,27 @@
     els.stageMessage.innerHTML = '<strong>操作：</strong>' + meta[3];
     els.panelBadge.textContent = state.phase === 'clay' ? clay().name : (state.phase === 'fire' ? state.temperature + '°C' : '360° 立体');
     els.exportBtn.disabled = !state.finalized;
+    els.backPhaseBtn.disabled = firingActive || phaseOrder.indexOf(state.phase) <= 0;
     els.smoothBtn.hidden = state.phase !== 'sculpt' && state.phase !== 'dry';
     els.smoothBtn.disabled = state.phase !== 'sculpt' && state.phase !== 'dry';
-    els.undoBtn.disabled = state.history.length === 0;
+    updateHistoryButtons();
     els.powerFloating.classList.toggle('on', state.wheelOn);
     els.powerFloating.querySelector('span').textContent = state.wheelOn ? '转盘运转中' : '转盘关闭';
     els.wheelPowerBtn.classList.toggle('on', state.wheelOn);
     els.wheelPowerBtn.setAttribute('aria-pressed', String(state.wheelOn));
     els.wheelPowerBtn.querySelector('span').textContent = state.wheelOn ? 'ON' : 'OFF';
     els.wheelPowerText.textContent = state.wheelOn ? '开启 · 可塑形' : '关闭 · 点击启动';
+    els.quickWheelBtn.classList.toggle('on', state.wheelOn);
+    els.quickWheelBtn.setAttribute('aria-pressed', String(state.wheelOn));
+    els.quickWheelText.textContent = state.wheelOn ? '暂停转盘' : '启动转盘';
+    els.dockPanelText.textContent = state.phase === 'clay'
+      ? '泥料与转盘'
+      : state.phase === 'decorate'
+        ? '上釉与彩绘'
+        : state.phase === 'fire'
+          ? '温控与本烧'
+          : '器型与下一步';
+    updateOrderCard();
     els.phases.forEach((button, index) => {
       const current = phaseOrder.indexOf(state.phase);
       button.classList.toggle('active', button.dataset.phase === state.phase);
@@ -250,11 +699,18 @@
     document.querySelectorAll('[data-tool]').forEach(button => button.classList.toggle('active', button.dataset.tool === state.tool));
     const toolButtons = document.querySelectorAll('#viewModes button');
     if (toolButtons.length === 2) {
-      toolButtons[0].textContent = state.phase === 'clay' ? '双手揉泥' : state.phase === 'decorate' ? '涂绘 / 贴花' : '双手捏制';
-      toolButtons[1].textContent = '360° 旋转';
+      toolButtons[0].textContent = state.phase === 'clay' ? '双手揉泥' : state.phase === 'decorate' ? '涂绘 / 贴花' : '手部塑形';
+      toolButtons[1].textContent = state.phase === 'decorate' ? '旋转看背面' : '360° 旋转';
+    }
+    const tripleNote = document.querySelector('.triple-note');
+    if (tripleNote) {
+      tripleNote.textContent = state.phase === 'decorate'
+        ? '滚轮旋转 · Alt+拖动看背面'
+        : '左右环绕 · 上下俯仰';
     }
     els.clayStageShell.classList.toggle('free-canvas-mode', state.phase === 'decorate' && state.decorMode === 'free');
     els.potteryCanvas.style.cursor = state.tool === 'rotate' ? 'grab' : state.phase === 'decorate' ? (state.decorMode === 'paint' || state.decorMode === 'free' ? 'crosshair' : 'pointer') : 'grab';
+    if (!['clay', 'sculpt', 'decorate'].includes(state.phase)) setContactVisible(false);
     renderClayOptions();
     renderSamples();
     renderPanel();
@@ -322,19 +778,9 @@
     const sample = id === 'custom' ? customSample : D.PROFILE_SAMPLES[id];
     if (!sample) return;
     state.sampleId = id;
-    if (state.phase === 'clay') {
-      renderSamples();
-      toast(sample.name + '已记为灵感参考，揉匀泥团后可继续自由塑形');
-      return;
-    }
-    state.profile = id === 'custom' ? makeCustomProfile() : D.expandProfile(sample);
-    state.handleCount = sample.handles || 0;
-    state.lumps = [];
-    state.history = [];
-    state.edgeSmoothed = false;
-    syncRenderer();
-    renderAll();
-    toast(sample.name + '已作为灵感起点，接下来仍可自由捏出不对称形状');
+    state.handleCount = 0;
+    renderSamples();
+    toast(sample.name + '已记为灵感参考；陶坯仍需从泥团开始由你亲手塑形');
   }
 
   const regionNames = { body: '器身', rim: '口沿', inside: '内壁', foot: '底足' };
@@ -349,6 +795,29 @@
         '<button class="palette-swatch ' + (state.selectedColorId === color.id ? 'selected' : '') + '" data-action="select-color" data-color="' + color.id + '" data-name="' + color.name + '" style="background:' + color.hex + '" aria-label="' + color.name + '"></button>'
       )).join('') + '</div>' +
       '<div class="selected-color"><span>当前颜色</span><strong>' + selectedColor().name + ' · ' + selectedColor().hex.toUpperCase() + '</strong></div>'
+    );
+  }
+
+  function glazePresetMarkup() {
+    const activeCategory = state.glazeCategory || '全部';
+    const presets = activeCategory === '全部'
+      ? D.GLAZE_PRESETS
+      : D.GLAZE_PRESETS.filter(preset => preset.category === activeCategory);
+    const selected = selectedGlazePreset();
+    return (
+      '<div class="section-title"><h3>釉色方案库</h3><span>共 ' + D.GLAZE_PRESETS.length + ' 套</span></div>' +
+      '<div class="glaze-category-tabs">' + D.GLAZE_CATEGORIES.map(category => (
+        '<button class="' + (activeCategory === category ? 'active' : '') + '" data-action="glaze-category" data-category="' + category + '" type="button">' + category + '</button>'
+      )).join('') + '</div>' +
+      '<div class="glaze-preset-grid">' + presets.map(preset => (
+        '<button class="glaze-preset-card ' + (state.selectedGlazePresetId === preset.id ? 'selected' : '') + '" data-action="select-glaze-preset" data-preset="' + preset.id + '" type="button" style="--glaze-a:' + preset.primary + ';--glaze-b:' + preset.secondary + '">' +
+          '<span class="glaze-mini-vessel pattern-' + preset.pattern + '"></span>' +
+          '<span class="glaze-card-copy"><strong>' + preset.name + '</strong><small>' + preset.category + ' · ' + preset.note + '</small></span>' +
+        '</button>'
+      )).join('') + '</div>' +
+      '<div class="glaze-selected-summary" data-glaze-summary><strong>' + (selected ? selected.name : '自定义纯色') + '</strong><span>' +
+        (selected ? selected.category + ' · ' + selected.note : '使用下方纯色色板') +
+      '</span></div>'
     );
   }
 
@@ -373,13 +842,15 @@
 
   function fillPanel() {
     return (
-      '<div class="section-title"><h3>全区域填色</h3><span>器身 / 口沿 / 内壁 / 底足</span></div>' +
+      glazePresetMarkup() +
+      '<div class="section-title"><h3>施釉部位</h3><span>先选区域，再应用当前方案</span></div>' +
       '<div class="region-grid">' + Object.entries(regionNames).map(([id, name]) => {
         const color = state.glaze[id];
         return '<button class="region-chip ' + (state.selectedRegion === id ? 'selected' : '') + '" data-action="select-region" data-region="' + id + '" type="button"><i style="background:' + (color ? color.hex : clay().base) + '"></i><span><strong>' + name + '</strong><small>' + (color ? color.name : '露胎') + '</small></span></button>';
       }).join('') + '</div>' +
+      '<div class="glaze-custom-title">自定义纯色</div>' +
       paletteMarkup() +
-      '<div class="action-row"><button class="secondary" data-action="apply-region" type="button">施到此区域</button><button class="primary" data-action="fill-all" type="button">全器填色</button></div>'
+      '<div class="action-row"><button class="secondary" data-action="apply-region" type="button">当前方案施到此区域</button><button class="primary" data-action="fill-all" type="button">全器施釉</button></div>'
     );
   }
 
@@ -392,7 +863,7 @@
           '<button class="brush-btn ' + (state.brushSize === size ? 'selected' : '') + '" data-action="brush-size" data-size="' + size + '" type="button"><i style="width:' + (5 + index * 3) + 'px;height:' + (5 + index * 3) + 'px"></i><span>' + ['细', '中', '粗'][index] + '</span></button>'
         )).join('') +
       '</div>' +
-      '<div class="inline-row"><button class="secondary" data-action="clear-paint" type="button">清除绘画</button></div>'
+      '<div class="inline-row"><button class="secondary" data-action="rotate-view" type="button">旋转看背面</button><button class="secondary" data-action="clear-paint" type="button">清除绘画</button></div>'
     );
   }
 
@@ -433,7 +904,7 @@
       )).join('') + '</div>' +
       stampColorMarkup() +
       '<div class="gloss-row"><span>贴花大小</span><input type="range" min="45" max="130" value="' + state.stampSize + '" data-range="stamp-size" aria-label="贴花大小"/><b>' + state.stampSize + '</b></div>' +
-      '<div class="action-row"><button class="secondary" data-action="stamp-one" type="button">点击陶器贴图</button><button class="primary" data-action="stamp-around" type="button">环绕器身一圈</button></div>'
+      '<div class="action-row"><button class="secondary" data-action="rotate-view" type="button">旋转看背面</button><button class="secondary" data-action="stamp-one" type="button">点击陶器贴图</button><button class="primary" data-action="stamp-around" type="button">环绕一圈</button></div>'
     );
   }
 
@@ -453,17 +924,19 @@
     const currentClay = clay();
     if (state.phase === 'clay') {
       return (
-        '<div class="intro-block"><span class="intro-num">01</span><div><h3>先让泥料听话</h3><p>打开转盘电源，用双手同时揉压。摄像头寻找两只手，不提供单手切换模式。</p></div></div>' +
-        '<div class="status-grid"><div><span>泥料</span><strong>' + currentClay.name + '</strong></div><div><span>泥团温度</span><strong>室温</strong></div><div><span>塑形方式</span><strong>双手协同</strong></div><div><span>气泡状态</span><strong id="bubbleState">' + (state.knead >= 100 ? '已排净' : '正在排出') + '</strong></div></div>' +
+        '<div class="intro-block"><span class="intro-num">01</span><div><h3>先让泥料听话</h3><p>打开转盘电源，用单手或双手揉压。 两只手同时出现时会自动进入协同塑形。</p></div></div>' +
+        '<div class="status-grid"><div><span>泥料</span><strong>' + currentClay.name + '</strong></div><div><span>泥团温度</span><strong>室温</strong></div><div><span>手部输入</span><strong>单双兼容</strong></div><div><span>气泡状态</span><strong id="bubbleState">' + (state.knead >= 100 ? '已排净' : '正在排出') + '</strong></div></div>' +
         '<div class="progress-block"><div class="progress-head"><span>练泥进度</span><strong id="panelKneadText">' + Math.round(state.knead) + '%</strong></div><div class="progress-track"><span id="panelKneadBar" style="width:' + state.knead + '%"></span></div></div>' +
-        '<div class="note-card"><i>手</i><div><strong>两只手都要出现</strong><p>手心朝向镜头，双手一起靠近、张开或压住泥团。只识别到一只手时会提示继续寻找。</p></div></div>' +
-        '<div class="action-row"><button class="secondary" data-action="quick-knead" type="button">快速揉匀</button><button class="primary" data-action="go-sculpt" type="button" ' + (state.knead >= 100 ? '' : 'disabled') + '>进入双手塑形 →</button></div>'
+        '<div class="note-card"><i>手</i><div><strong>捏合开始，松开停止</strong><p>张开手掌负责移动，拇指与食指捏合后才会塑形；单手和双手都可以。</p></div></div>' +
+        '<div class="action-row"><button class="secondary" data-action="quick-knead" type="button">一键揉匀并开始</button><button class="primary" data-action="go-sculpt" type="button" ' + (state.knead >= 100 ? '' : 'disabled') + '>进入手部塑形 →</button></div>'
       );
     }
     if (state.phase === 'sculpt') {
       return (
         '<div class="intro-block"><span class="intro-num">02</span><div><h3>从自由器型开始</h3><p>不必先选参考图。直接拖动器身推、压、捏；需要时再从左侧灵感架借一个起点。</p></div></div>' +
-        '<div class="note-card"><i>360</i><div><strong>任意轮廓，任意起伏</strong><p>上下拖动可改变俯视角，左右拖动可环绕观察。口沿、内壁与器身会保持同一个三维关系。</p></div></div>' +
+        '<div class="progress-block"><div class="progress-head"><span>器型形成度</span><strong id="formProgressText">' + throwPercent() + '%</strong></div><div class="progress-track"><span id="formProgressBar" style="width:' + throwPercent() + '%"></span></div></div>' +
+        '<div class="status-grid"><div><span>泥团高度</span><strong id="formHeightText">' + state.heightFactor.toFixed(2) + '×</strong></div><div><span>手部输入</span><strong>单双兼容</strong></div></div>' +
+        '<div class="note-card"><i>360</i><div><strong>上下提压，左右塑形</strong><p>捏住后上下移动改变高度，左右扫动改变局部器型；每次动作后回到中间再移动，可以继续操作。</p></div></div>' +
         '<div class="section-title"><h3>口沿塑形</h3><span>单独调整口径与唇边</span></div>' +
         '<div class="slider-stack">' +
           '<label class="slider-row"><header><span>口径大小<small>收口 / 敞口</small></span><output>' + Math.round(state.mouth.diameter * 100) + '%</output></header><input type="range" min="65" max="140" value="' + Math.round(state.mouth.diameter * 100) + '" data-range="mouth-size" aria-label="口径大小"/></label>' +
@@ -471,10 +944,15 @@
           '<label class="slider-row"><header><span>内壁深度<small>浅口 / 深腔</small></span><output>' + Math.round(state.mouth.depth * 100) + '%</output></header><input type="range" min="15" max="80" value="' + Math.round(state.mouth.depth * 100) + '" data-range="mouth-depth" aria-label="内壁深度"/></label>' +
         '</div>' +
         '<div class="color-tabs mouth-tabs"><button class="' + (state.mouth.style === 'round' ? 'active' : '') + '" data-action="mouth-style" data-style="round" type="button">圆口</button><button class="' + (state.mouth.style === 'flare' ? 'active' : '') + '" data-action="mouth-style" data-style="flare" type="button">外撇口</button><button class="' + (state.mouth.style === 'inward' ? 'active' : '') + '" data-action="mouth-style" data-style="inward" type="button">内收口</button></div>' +
+        '<div class="section-title"><h3>手感控制</h3><span>实时影响塑形</span></div>' +
+        '<div class="slider-stack">' +
+          '<label class="slider-row"><header><span>转盘速度<small>慢 / 快</small></span><output>' + Math.round(state.wheelSpeed * 100) + '%</output></header><input type="range" min="25" max="250" value="' + Math.round(state.wheelSpeed * 100) + '" data-range="wheel-speed" aria-label="转盘速度"/></label>' +
+          '<label class="slider-row"><header><span>捏形力度<small>轻 / 强</small></span><output>' + Math.round(state.pinchForce * 100) + '%</output></header><input type="range" min="40" max="180" value="' + Math.round(state.pinchForce * 100) + '" data-range="pinch-force" aria-label="捏形力度"/></label>' +
+        '</div>' +
         '<div class="section-title"><h3>修边力度</h3><span>保留手作感</span></div>' +
         '<div class="slider-row"><header><span>平滑强度<small>轻柔 / 标准 / 精细</small></span><output>' + state.smoothStrength + '</output></header><input type="range" min="1" max="3" value="' + state.smoothStrength + '" data-range="smooth-strength" aria-label="修边力度"/></div>' +
-        '<div class="action-row"><button class="secondary" data-action="smooth-edge" type="button">✦ 一键修饰边缘</button><button class="primary" data-action="go-dry" type="button" ' + (state.edgeSmoothed ? '' : 'disabled') + '>进入修边干燥 →</button></div>' +
-        '<div class="note-card"><i>' + (state.edgeSmoothed ? '✓' : '!') + '</i><div><strong>' + (state.edgeSmoothed ? '边缘已经修饰' : '先修饰粗糙边缘') + '</strong><p>修边会顺滑口沿、锯齿和毛刺，但保留轻微手捏起伏。修边完成后仍可继续塑形。</p></div></div>'
+        '<div class="action-row"><button class="secondary" data-action="smooth-edge" type="button">可选：一键修饰边缘</button><button class="primary" data-action="go-dry" type="button">我捏好了 →</button></div>' +
+        '<div class="note-card"><i>✓</i><div><strong>' + (throwPercent() >= 70 ? '器型已经形成' : '可以保留当前手作感') + '</strong><p>完成度只作为参考，不限制继续。觉得轮廓满意时，随时进入修边干燥；修饰边缘也可在下一步完成。</p></div></div>'
       );
     }
     if (state.phase === 'dry') {
@@ -531,6 +1009,7 @@
         stamp.draw(canvas.getContext('2d'), 74, state.stampColor);
       });
     }
+    updateOrderCard();
   }
 
   function setPhase(phase) {
@@ -538,15 +1017,38 @@
     state.phase = phase;
     state.tool = phase === 'decorate' ? state.tool : 'sculpt';
     if (phase === 'sculpt') {
-      const sample = state.sampleId === 'custom' ? customSample : (D.PROFILE_SAMPLES[state.sampleId] || customSample);
       if (previousPhase === 'clay' || !state.profile || state.profile.length === 0) {
-        state.profile = state.sampleId === 'custom' ? makeCustomProfile() : D.expandProfile(sample);
+        state.profile = makeThrowProfile();
+        state.heightFactor = .62;
+        state.throwProgress = 0;
         state.lumps = [];
       }
-      state.handleCount = sample.handles || 0;
+      state.handleCount = 0;
     }
     renderAll();
-    toast(phase === 'sculpt' ? '双手塑形已就绪，两只手会同时改变坯体' : phaseMeta()[1]);
+    if (phase !== 'clay') closeWorkshopDrawers();
+    toast(phase === 'sculpt' ? '手部塑形已就绪：张开手掌定位，捏合开始，松开停止' : phaseMeta()[1]);
+  }
+
+  function returnToPhase(phase) {
+    const targetIndex = phaseOrder.indexOf(phase);
+    const currentIndex = phaseOrder.indexOf(state.phase);
+    if (firingActive || targetIndex < 0 || targetIndex >= currentIndex) return;
+    if (state.bisqueDone && targetIndex < phaseOrder.indexOf('bisque')) {
+      const confirmed = window.confirm('返回素烧前的步骤会取消素烧与本烧状态，现有绘画会保留。确定继续吗？');
+      if (!confirmed) return;
+      state.bisqueDone = false;
+      state.finalized = false;
+      state.firedFinishId = state.finishId;
+    } else if (state.finalized && targetIndex < phaseOrder.indexOf('fire')) {
+      state.finalized = false;
+    }
+    setPhase(phase);
+  }
+
+  function goPreviousPhase() {
+    const currentIndex = phaseOrder.indexOf(state.phase);
+    if (currentIndex > 0) returnToPhase(phaseOrder[currentIndex - 1]);
   }
 
   function quickKnead() {
@@ -557,7 +1059,10 @@
     state.knead = 100;
     state.rawProfile = makeRawProfile().map((r, i) => r * (1 + Math.sin(i * 1.7) * .035));
     renderAll();
-    toast('泥团已经揉匀，可以开始双手塑形');
+    toast('泥团已经揉匀，正在进入手部塑形');
+    window.setTimeout(() => {
+      if (state.phase === 'clay' && state.knead >= 100) setPhase('sculpt');
+    }, 420);
   }
 
   function updateKneadUi() {
@@ -587,59 +1092,211 @@
 
   function onHandUpdate(data) {
     const now = performance.now();
-    const deltaTime = lastHandAt ? Math.min(250, now - lastHandAt) : 100;
     if (!state.wheelOn) {
-      els.handMessage.textContent = '双手已识别，但转盘电源关闭。打开电源后才会改变泥团。';
+      pinchWasActive = false;
+      lastActivePinch = null;
+      updateContactFromHands(data, 0);
+      els.handMessage.textContent = (data.handCount === 1 ? '单手' : '双手') + '已识别，但转盘电源关闭。打开电源后才会改变泥团。';
       return;
     }
     if (state.phase !== 'clay' && state.phase !== 'sculpt') return;
+    if (data.pinchSupported && !data.pinching) {
+      pinchWasActive = false;
+      lastActivePinch = null;
+      handActionFeedback = { text: '', until: 0 };
+      updateContactFromHands(data, 0);
+      els.handMessage.textContent = data.handCount === 1
+        ? '已识别一只手；捏合拇指和食指开始局部塑形'
+        : '双手已就位；捏合拇指和食指开始塑形，松开即停止';
+      lastHandAt = now;
+      lastHandData = {
+        separation: data.separation,
+        openness: data.averageOpenness,
+        averageY: data.averageY,
+        hands: data.hands.map(hand => ({ openness: hand.openness, x: hand.x, y: hand.y }))
+      };
+      return;
+    }
     if (now - handDeformCooldown < 90) return;
     handDeformCooldown = now;
-    const separationDelta = lastHandData ? data.separation - lastHandData.separation : 0;
+    const activeHands = data.pinchSupported
+      ? data.hands.filter(hand => hand.pinching)
+      : data.hands;
+    const activeHits = activeHands.map(hand => {
+      const uv = renderer.screenPointToUv(
+        hand.x * els.potteryCanvas.clientWidth,
+        hand.y * els.potteryCanvas.clientHeight
+      );
+      return uv.hit ? { hand, uv, side: hand.x < .5 ? '左侧' : '右侧' } : null;
+    }).filter(Boolean);
+    const carriedHits = lastActivePinch && lastActivePinch.hits ? lastActivePinch.hits : [];
+    const workingHits = activeHits.length ? activeHits : carriedHits;
+    if (!workingHits.length) {
+      pinchWasActive = false;
+      lastActivePinch = null;
+      setContactVisible(false);
+      els.handMessage.textContent = '已识别手部，但捏合点还没有落到陶器表面';
+      return;
+    }
+    const activePositions = activeHands.map(hand => ({
+      x: Number.isFinite(hand.palmX) ? hand.palmX : hand.x,
+      y: hand.y
+    }));
+    const activeX = activePositions.reduce((sum, hand) => sum + hand.x, 0) / activePositions.length;
+    const activeY = activePositions.reduce((sum, hand) => sum + hand.y, 0) / activePositions.length;
+    const activeHorizontal = activePositions.length > 1
+      ? Math.abs(activePositions[1].x - activePositions[0].x)
+      : activePositions[0].x;
+    const justStarted = !pinchWasActive || !lastActivePinch;
+    const pressure = clamp(data.averagePinchStrength == null ? .55 : data.averagePinchStrength, .1, 1);
+    const deformationScale = state.pinchForce;
+    const anchorY = justStarted ? activeY : (lastActivePinch.anchorY == null ? activeY : lastActivePinch.anchorY);
+    const anchorX = justStarted ? activeX : (lastActivePinch.anchorX == null ? activeX : lastActivePinch.anchorX);
+    const anchorHorizontal = justStarted
+      ? activeHorizontal
+      : (lastActivePinch.anchorHorizontal == null ? activeHorizontal : lastActivePinch.anchorHorizontal);
+    const verticalTravel = activeY - anchorY;
+    const horizontalTravel = activeHorizontal - anchorHorizontal;
+    let horizontalLatched = !!(lastActivePinch && lastActivePinch.horizontalLatched);
+    let verticalLatched = !!(lastActivePinch && lastActivePinch.verticalLatched);
 
     if (state.phase === 'clay') {
-      state.knead = clamp(state.knead + deltaTime * .012 + Math.abs(separationDelta) * 16, 0, 100);
-      data.hands.forEach((hand, index) => {
-        const v = clamp(1 - hand.y, .08, .92);
-        const angle = renderer.screenAngle(hand.x);
-        addGestureLump(v, angle, (hand.openness - .5) * .055, .5, .17);
-        const center = clamp(Math.round(v * (state.rawProfile.length - 1)), 1, state.rawProfile.length - 2);
-        for (let i = 0; i < state.rawProfile.length; i += 1) {
-          const d = Math.abs(i - center) / (state.rawProfile.length * .2);
-          state.rawProfile[i] = clamp(state.rawProfile[i] + (hand.openness - .5) * .0035 * Math.exp(-d * d), .18, 1.1);
-        }
-      });
+      if (justStarted) {
+        pushHistory('捏合揉泥');
+        state.knead = clamp(state.knead + 8 + pressure * 5, 0, 100);
+        workingHits.forEach(item => {
+          deformLocal(item.uv.v, item.uv.angle, -.025 * (0.65 + pressure * .35) * deformationScale);
+        });
+        pulseContact();
+        els.handMessage.textContent = '捏合一次 · 收紧一次';
+      }
       updateKneadUi();
+      if (activeHits.length) updateContactFromHands(data, Math.max(.03, pressure));
+      else placeContact(
+        workingHits.map(item => ({ ...item.uv, side: item.side })),
+        { ...workingHits[0].uv, side: workingHits[0].side },
+        activeHandActionText() || '保持捏合 · 拖动继续塑形',
+        true
+      );
       syncRenderer();
       if (state.knead >= 100) {
         const action = els.panelContent.querySelector('[data-action="go-sculpt"]');
         if (action && action.disabled) renderPanel();
       }
     } else {
-      if (now - lastHistoryAt > 1400) {
-        pushHistory();
-        lastHistoryAt = now;
-      }
-      state.edgeSmoothed = false;
-      data.hands.forEach(hand => {
-        const v = clamp(1 - hand.y, .08, .94);
-        const angle = renderer.screenAngle(hand.x);
-        const strength = (hand.openness - .5) * .16 + separationDelta * .42;
-        addGestureLump(v, angle, strength, .56, .14);
-        const center = clamp(Math.round(v * (state.profile.length - 1)), 1, state.profile.length - 2);
-        for (let i = 0; i < state.profile.length; i += 1) {
-          const d = Math.abs(i - center) / (state.profile.length * .19);
-          state.profile[i] = clamp(state.profile[i] + strength * .055 * Math.exp(-d * d), .14, 1.14);
+      if (justStarted) {
+        pushHistory('捏合塑形');
+        workingHits.forEach(item => {
+          deformLocal(item.uv.v, item.uv.angle, -.04 * (0.65 + pressure * .35) * deformationScale);
+        });
+        pulseContact();
+        els.handMessage.textContent = '捏合一次 · 收紧一次';
+      } else {
+        const horizontalThreshold = activeHands.length > 1 ? .026 : .022;
+        const verticalThreshold = .028;
+        const horizontalScore = Math.abs(horizontalTravel) / horizontalThreshold;
+        const verticalScore = Math.abs(verticalTravel) / verticalThreshold;
+        let horizontalReady = !horizontalLatched && horizontalScore >= 1 && horizontalScore >= verticalScore * .78;
+        let verticalReady = !verticalLatched && verticalScore >= 1 && verticalScore >= horizontalScore * .78;
+        if (horizontalReady && verticalReady) {
+          if (horizontalScore >= verticalScore) verticalReady = false;
+          else horizontalReady = false;
         }
-      });
+        if (horizontalReady) {
+          const horizontalStep = horizontalTravel > 0 ? .045 : -.045;
+          workingHits.forEach(item => {
+            deformLocal(item.uv.v, item.uv.angle, horizontalStep * deformationScale);
+          });
+          rememberHandAction(activeHands.length > 1
+            ? (horizontalTravel > 0 ? '双手分开 · 器壁扩张一格' : '双手靠近 · 器壁收窄一格')
+            : (horizontalTravel > 0 ? '向右推 · 局部外扩一格' : '向左推 · 局部收窄一格'));
+          horizontalLatched = true;
+          pulseContact();
+          syncRenderer();
+        } else if (verticalReady) {
+          const step = verticalTravel > 0 ? -.075 : .075;
+          state.heightFactor = clamp(state.heightFactor + step * deformationScale, .62, 1.02);
+          state.shapeWork = clamp((state.shapeWork || 0) + .04, 0, 1);
+          rememberHandAction(verticalTravel > 0 ? '下压一次 · 降低一格' : '上提一次 · 升高一格');
+          verticalLatched = true;
+          pulseContact();
+          syncRenderer();
+        } else {
+          if (horizontalLatched && Math.abs(horizontalTravel) < .009) horizontalLatched = false;
+          if (verticalLatched && Math.abs(verticalTravel) < .009) verticalLatched = false;
+        }
+        state.edgeSmoothed = false;
+      }
+      state.throwProgress = throwPercent();
+      updateSculptProgressUi();
+      if (activeHits.length) updateContactFromHands(data, Math.max(.03, pressure));
+      else placeContact(
+        workingHits.map(item => ({ ...item.uv, side: item.side })),
+        { ...workingHits[0].uv, side: workingHits[0].side },
+        activeHandActionText() || '保持捏合 · 拖动继续塑形',
+        true
+      );
       syncRenderer();
     }
+    pinchWasActive = true;
+    lastActivePinch = {
+      x: activeX,
+      y: activeY,
+      horizontal: activeHorizontal,
+      anchorX,
+      anchorY,
+      anchorHorizontal,
+      horizontalLatched,
+      verticalLatched,
+      hits: workingHits.map(item => ({ hand: { x: item.hand.x, y: item.hand.y }, uv: item.uv, side: item.side }))
+    };
     lastHandAt = now;
     lastHandData = {
       separation: data.separation,
       openness: data.averageOpenness,
-      hands: data.hands.map(hand => ({ openness: hand.openness }))
+      averageY: data.averageY,
+      pinching: data.pinching,
+      hands: data.hands.map(hand => ({ openness: hand.openness, x: hand.x, y: hand.y }))
     };
+  }
+
+  function updateHandDiagnostics(stats) {
+    if (!els.handDiagnostics) return;
+    els.diagFps.textContent = stats.fps ? stats.fps + ' fps' : '--';
+    els.diagHands.textContent = String(stats.hands || 0);
+    els.diagPinch.textContent = stats.pinchDistance == null
+      ? '--'
+      : (stats.pinching ? '捏合 ' : '松开 ') + stats.pinchDistance.toFixed(2);
+    els.diagLatency.textContent = stats.latency == null ? '--' : Math.round(stats.latency) + ' ms';
+  }
+
+  function updateCalibrationStatus(info) {
+    if (!els.calibrationStatus || !info) return;
+    if (info.message) {
+      els.calibrationStatus.textContent = info.message;
+      return;
+    }
+    els.calibrationStatus.textContent = info.calibrated
+      ? '捏合 ' + info.enter.toFixed(2) + ' / 松开 ' + info.release.toFixed(2)
+      : '捏合阈值：默认';
+  }
+
+  async function calibrateHands() {
+    if (!handTracker || !state.cameraOn) {
+      toast('请先开启摄像头');
+      setCameraPanelExpanded(window.innerWidth >= 981);
+      return;
+    }
+    setCameraPanelExpanded(window.innerWidth >= 981);
+    els.calibrateHandsBtn.disabled = true;
+    const success = await handTracker.calibrate();
+    els.calibrateHandsBtn.disabled = false;
+    if (success) {
+      updateCalibrationStatus(handTracker.getCalibrationInfo());
+      toast('手势校准完成');
+    } else {
+      toast('手势校准未完成，请保持手掌和拇指、食指清晰可见');
+    }
   }
 
   function createHandTracker() {
@@ -647,16 +1304,29 @@
       video: els.cameraVideo,
       overlay: els.handOverlay,
       onUpdate: onHandUpdate,
+      onDiagnostics: updateHandDiagnostics,
+      onCalibration: updateCalibrationStatus,
       onStatus: (message, kind) => {
-        els.handMessage.textContent = message;
-        const connected = kind === 'active' || kind === 'opening' || kind === 'searching';
-        els.cameraBadge.textContent = kind === 'active' ? '双手同步' : kind === 'searching' ? '寻找双手' : kind === 'opening' ? '已连接' : kind === 'requesting' ? '连接中' : '未开启';
+        els.handMessage.textContent = activeHandActionText() || message;
+        if (kind !== 'active') setContactVisible(false);
+        const connected = kind === 'active' || kind === 'opening' || kind === 'searching' || kind === 'calibrating';
+        els.cameraBadge.textContent = kind === 'active' ? '手部识别' : kind === 'calibrating' ? '校准中' : kind === 'searching' ? '寻找手部' : kind === 'opening' ? '已连接' : kind === 'requesting' ? '连接中' : '未开启';
         els.cameraBadge.classList.toggle('active', connected);
         els.topHandStatus.classList.toggle('active', connected);
         els.topHandStatus.classList.toggle('searching', kind === 'searching' || kind === 'requesting');
-        els.topHandStatus.querySelector('span').textContent = kind === 'active' ? '双手同步中' : kind === 'searching' ? '摄像头已开 · 寻找双手' : kind === 'opening' ? '摄像头已连接' : message;
+        els.topHandStatus.querySelector('span').textContent = kind === 'active' || kind === 'calibrating' ? message : kind === 'searching' ? '摄像头已开 · 寻找手部' : kind === 'opening' ? '摄像头已连接' : message;
       }
     });
+    updateCalibrationStatus(handTracker.getCalibrationInfo());
+  }
+
+  function setCameraPanelExpanded(expanded) {
+    els.cameraBody.hidden = !expanded;
+    els.cameraTogglePanelBtn.setAttribute('aria-expanded', String(expanded));
+    els.cameraTogglePanelBtn.textContent = expanded ? '收起' : '展开';
+    document.body.classList.toggle('camera-expanded', expanded);
+    const card = els.cameraBody.closest('.camera-overlay');
+    if (card) card.classList.toggle('collapsed', !expanded);
   }
 
   async function toggleCamera() {
@@ -666,6 +1336,7 @@
       state.cameraOn = false;
       els.cameraBtn.textContent = '开启摄像头';
       els.cameraPlaceholder.hidden = false;
+      els.calibrateHandsBtn.disabled = true;
       return;
     }
     els.cameraBtn.disabled = true;
@@ -678,7 +1349,9 @@
     if (started) {
       els.cameraBtn.textContent = '关闭摄像头';
       els.cameraPlaceholder.hidden = true;
-      toast(state.wheelOn ? '摄像头已开启，双手会同时改变坯体' : '摄像头已开启，但转盘仍关闭；打开转盘电源后才能塑形');
+      els.calibrateHandsBtn.disabled = false;
+      setCameraPanelExpanded(true);
+      toast(state.wheelOn ? '摄像头已开启，捏合拇指和食指即可塑形' : '摄像头已开启，但转盘仍关闭；打开转盘电源后才能塑形');
     } else {
       els.cameraBtn.textContent = '重试摄像头';
       els.cameraPlaceholder.hidden = false;
@@ -707,7 +1380,10 @@
       els.cameraBadge.classList.remove('active');
       els.topHandStatus.classList.remove('active', 'searching');
       els.topHandStatus.querySelector('span').textContent = '摄像头未开启';
-      els.handMessage.textContent = '把双手一起放进画面，掌心朝向镜头。';
+      els.handMessage.textContent = '张开手掌定位，拇指与食指捏合后开始塑形。';
+      pinchWasActive = false;
+      lastActivePinch = null;
+      handActionFeedback = { text: '', until: 0 };
       return;
     }
     if (!state.wheelOn) {
@@ -716,14 +1392,17 @@
     }
     if (!handTracker) createHandTracker();
     state.demoOn = true;
+    handActionFeedback = { text: '', until: 0 };
+    handTracker.resetDemo();
     els.demoHandsBtn.textContent = '停止演示';
     els.cameraPlaceholder.hidden = true;
+    setCameraPanelExpanded(true);
     demoInterval = setInterval(() => handTracker.demoUpdate(), 90);
   }
 
   function smoothEdges() {
     if (state.phase !== 'sculpt' && state.phase !== 'dry') return;
-    pushHistory();
+    pushHistory('边缘修饰');
     const passes = state.smoothStrength;
     let profile = state.profile.slice();
     for (let pass = 0; pass < passes; pass += 1) {
@@ -744,58 +1423,83 @@
     state.edgeSmoothed = true;
     syncRenderer();
     renderPanel();
+    updateHistoryButtons();
     toast('边缘已顺滑：去除了毛刺与锯齿，同时保留轻微手作起伏');
   }
 
   function applyGlaze(region, color) {
+    pushHistory('区域施釉');
     state.glaze[region] = color;
+    const preset = selectedGlazePreset();
+    if (preset && color && color.presetId === preset.id) {
+      state.finishId = preset.finish;
+      state.gloss = preset.gloss;
+      state.texture = preset.texture;
+    }
     state.hasArtwork = true;
     syncRenderer();
     renderPanel();
+    updateHistoryButtons();
     toast((color ? color.name : '露胎') + '已应用到' + regionNames[region]);
   }
 
   function fillAll() {
-    const color = selectedColor();
+    pushHistory('全器施釉');
+    const color = selectedGlazePaint();
     Object.keys(state.glaze).forEach(region => { state.glaze[region] = color; });
+    const preset = selectedGlazePreset();
+    if (preset) {
+      state.finishId = preset.finish;
+      state.gloss = preset.gloss;
+      state.texture = preset.texture;
+    }
     state.hasArtwork = true;
     syncRenderer();
     renderPanel();
+    updateHistoryButtons();
     toast('全器已填色：' + color.name);
   }
 
   function clearPaint() {
+    pushHistory('清除器表彩绘');
     renderer.clearTexture();
     state.surfaceArtwork = false;
     state.hasArtwork = state.freeArtwork || Object.values(state.glaze).some(Boolean);
     renderPanel();
+    updateHistoryButtons();
     toast('器表彩绘已清除');
   }
 
   function clearFreeCanvas() {
+    pushHistory('清空自由画布');
     renderer.clearFreeCanvas();
     state.freeArtwork = false;
     state.hasArtwork = state.surfaceArtwork || Object.values(state.glaze).some(Boolean);
     renderPanel();
+    updateHistoryButtons();
     toast('自由画布已清空');
   }
 
   function stampAround() {
     const stamp = D.STAMPS.find(s => s.id === state.stampId);
     if (!stamp) return;
+    pushHistory('环绕贴花');
     for (let i = 0; i < 4; i += 1) {
       renderer.stampUv(i / 4 + .06, .5, stamp.draw, state.stampColor, Math.max(150, state.stampSize * 1.35));
     }
     state.surfaceArtwork = true;
     state.hasArtwork = true;
     renderPanel();
+    updateHistoryButtons();
     toast(stamp.name + '已环绕器身一圈');
   }
 
   function randomDecor() {
+    pushHistory('随机配色');
     const colors = D.COLORS.filter(color => color.group === '马卡龙');
     const random = colors[Math.floor(Math.random() * colors.length)];
     state.selectedColorId = random.id;
+    state.selectedGlazePresetId = '';
     const regions = Object.keys(state.glaze);
     state.glaze.body = random;
     state.glaze.rim = Math.random() > .42 ? D.COLORS[Math.floor(Math.random() * D.COLORS.length)] : null;
@@ -807,6 +1511,7 @@
     state.hasArtwork = true;
     syncRenderer();
     renderPanel();
+    updateHistoryButtons();
     toast('随机釉色、光泽和纹理已经组合完成');
   }
 
@@ -905,7 +1610,6 @@
     els.kilnView.hidden = true;
     els.resultView.hidden = false;
     els.resultCopy.textContent = state.temperature + '°C ' + (state.atmosphere === 'oxidation' ? '氧化烧' : '还原烧') + '，形成了' + finish.name + '釉面，并且可以从 360° 任意角度欣赏。';
-    els.resultArt.innerHTML = '<img style="width:100%;height:100%;object-fit:contain" src="' + snapshotImage() + '" alt="本烧完成的陶器"/>';
     els.resultSpecs.innerHTML = [
       pieceName(),
       state.temperature + '°C',
@@ -914,6 +1618,46 @@
       findTexture(state.texture).name,
       glazeNames
     ].map(text => '<span>' + text + '</span>').join('');
+    const order = currentOrder();
+    const completed = orderCheckStatus().filter(check => check.done).length;
+    const feedback = completed === 3
+      ? order.customer + '非常喜欢这件作品，订单要求全部达成。'
+      : completed === 2
+        ? order.customer + '觉得整体很合适，还有一项可以继续琢磨。'
+        : completed === 1
+          ? order.customer + '看到了你的想法，下一单可以再贴近要求一些。'
+          : '这次保留了自由创作，但还没有满足' + order.customer + '的委托要求。';
+    els.resultOrder.innerHTML =
+      '<strong>' + order.title + ' · ' + '★'.repeat(completed) + '☆'.repeat(3 - completed) + '</strong>' +
+      '<span>' + feedback + '</span>';
+    setResultAngle(state.exportAngle || 'side');
+  }
+
+  function resultViewAngles(angle) {
+    const views = {
+      front: [-.36, .08],
+      side: [.92, .25],
+      top: [-.36, 1.18]
+    };
+    return views[angle] || views.side;
+  }
+
+  function setResultAngle(angle) {
+    const normalized = ['front', 'side', 'top'].includes(angle) ? angle : 'side';
+    state.exportAngle = normalized;
+    if (resultExportCache.angle !== normalized || !resultExportCache.dataUrl) {
+      resultExportCache = {
+        angle: normalized,
+        dataUrl: renderer.exportPng(normalized)
+      };
+    }
+    const label = { front: '正面', side: '侧面', top: '俯视' }[normalized];
+    els.resultArt.innerHTML = '<img style="width:100%;height:100%;object-fit:contain" src="' + resultExportCache.dataUrl + '" alt="' + label + '陶器导出预览"/>';
+    els.resultAnglePicker.querySelectorAll('[data-export-angle]').forEach(button => {
+      const active = button.dataset.exportAngle === normalized;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
   }
 
   function closeModal() {
@@ -942,9 +1686,13 @@
     }
     const stamp = new Date();
     const pad = value => String(value).padStart(2, '0');
-    const name = '泥火之间-' + D.PROFILE_SAMPLES[state.sampleId].name + '-' + stamp.getFullYear() + pad(stamp.getMonth() + 1) + pad(stamp.getDate()) + '-' + pad(stamp.getHours()) + pad(stamp.getMinutes()) + '.png';
-    downloadDataUrl(renderer.exportPng(), name);
-    toast('成品 PNG 已保存，请到浏览器的下载文件夹查看');
+    const angleLabel = { front: '正面', side: '侧面', top: '俯视' }[state.exportAngle] || '侧面';
+    const name = '泥火之间-' + pieceName() + '-' + angleLabel + '-' + stamp.getFullYear() + pad(stamp.getMonth() + 1) + pad(stamp.getDate()) + '-' + pad(stamp.getHours()) + pad(stamp.getMinutes()) + '.png';
+    const dataUrl = resultExportCache.angle === state.exportAngle && resultExportCache.dataUrl
+      ? resultExportCache.dataUrl
+      : renderer.exportPng(state.exportAngle);
+    downloadDataUrl(dataUrl, name);
+    toast(angleLabel + '视角 PNG 已保存，请到浏览器的下载文件夹查看');
   }
 
   function stopAuxiliaryTimers() {
@@ -959,26 +1707,46 @@
     firingActive = false;
   }
 
-  function resetGame(force) {
+  function resetGame(force, advanceOrder) {
     if (!force && !window.confirm('重新开始会清空当前泥料、坯体、釉色和贴花，确定继续吗？')) return;
+    const currentIndex = D.CUSTOMER_ORDERS.findIndex(order => order.id === state.currentOrderId);
+    const orderId = advanceOrder && D.CUSTOMER_ORDERS.length
+      ? D.CUSTOMER_ORDERS[(currentIndex + 1 + D.CUSTOMER_ORDERS.length) % D.CUSTOMER_ORDERS.length].id
+      : state.currentOrderId;
     stopAuxiliaryTimers();
     if (handTracker) handTracker.stop();
     handTracker = null;
     state = initialState();
+    state.currentOrderId = orderId;
+    resultExportCache = { angle: null, dataUrl: '' };
     renderer.clearTexture();
     renderer.clearFreeCanvas();
-    renderer.setView(-.36, .34);
+    renderer.setView(-.36, .48);
     lastHandData = null;
     lastHandAt = 0;
+    handActionFeedback = { text: '', until: 0 };
     els.cameraBtn.textContent = '开启摄像头';
     els.cameraPlaceholder.hidden = false;
-    els.handMessage.textContent = '把双手一起放进画面，掌心朝向镜头。';
+    els.calibrateHandsBtn.disabled = true;
+    els.handDiagnostics.hidden = true;
+    els.handDiagnosticsBtn.setAttribute('aria-expanded', 'false');
+    setCameraPanelExpanded(false);
+    els.handMessage.textContent = '张开手掌定位，拇指与食指捏合后开始塑形。';
     els.cameraBadge.textContent = '关闭';
     els.cameraBadge.classList.remove('active');
     els.topHandStatus.classList.remove('active', 'searching');
     els.topHandStatus.querySelector('span').textContent = '摄像头未开启';
+    setContactVisible(false);
+    [els.centerViewBtn, els.quarterViewBtn, els.topViewBtn].forEach(button => {
+      button.classList.toggle('active', button === els.quarterViewBtn);
+    });
     els.modal.hidden = true;
     document.body.classList.remove('modal-open');
+    els.resultAnglePicker.querySelectorAll('[data-export-angle]').forEach(button => {
+      const active = button.dataset.exportAngle === 'side';
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
     renderAll();
     toast('新的泥料已经准备好');
   }
@@ -988,7 +1756,7 @@
     else if (action === 'go-sculpt' && state.knead >= 100) setPhase('sculpt');
     else if (action === 'mouth-style') { state.mouth.style = button.dataset.style; syncRenderer(); renderPanel(); }
     else if (action === 'smooth-edge') smoothEdges();
-    else if (action === 'go-dry' && state.edgeSmoothed) setPhase('dry');
+    else if (action === 'go-dry') setPhase('dry');
     else if (action === 'begin-dry') beginDry();
     else if (action === 'go-bisque' && state.dryProgress >= 100) setPhase('bisque');
     else if (action === 'back-dry') setPhase('dry');
@@ -998,18 +1766,44 @@
       renderAll();
     }
     else if (action === 'color-group') { state.colorGroup = button.dataset.group; renderPanel(); }
-    else if (action === 'select-color') { state.selectedColorId = button.dataset.color; renderPanel(); }
+    else if (action === 'select-color') {
+      state.selectedColorId = button.dataset.color;
+      state.selectedGlazePresetId = '';
+      renderPanel();
+    }
+    else if (action === 'glaze-category') {
+      state.glazeCategory = button.dataset.category;
+      renderPanel();
+    }
+    else if (action === 'select-glaze-preset') {
+      const preset = D.GLAZE_PRESETS.find(item => item.id === button.dataset.preset);
+      if (!preset) return;
+      state.selectedGlazePresetId = preset.id;
+      document.querySelectorAll('.glaze-preset-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.preset === preset.id);
+      });
+      const summary = els.panelContent.querySelector('[data-glaze-summary]');
+      if (summary) {
+        summary.querySelector('strong').textContent = preset.name;
+        summary.querySelector('span').textContent = preset.category + ' · ' + preset.note;
+      }
+    }
     else if (action === 'select-stamp-color') {
       state.stampColorId = button.dataset.color;
       state.stampColor = selectedStampColor().hex;
       renderPanel();
     }
     else if (action === 'select-region') { state.selectedRegion = button.dataset.region; renderPanel(); }
-    else if (action === 'apply-region') applyGlaze(state.selectedRegion, selectedColor());
+    else if (action === 'apply-region') applyGlaze(state.selectedRegion, selectedGlazePaint());
     else if (action === 'fill-all') fillAll();
     else if (action === 'select-finish') { state.finishId = button.dataset.finish; syncRenderer(); renderPanel(); }
     else if (action === 'select-texture') { state.texture = button.dataset.texture; syncRenderer(); renderPanel(); }
     else if (action === 'brush-size') { state.brushSize = Number(button.dataset.size); renderPanel(); }
+    else if (action === 'rotate-view') {
+      state.tool = 'rotate';
+      renderAll();
+      toast('拖动或滚轮旋转器物；转到背面后点“涂绘 / 贴花”继续绘制');
+    }
     else if (action === 'clear-paint') clearPaint();
     else if (action === 'clear-free') clearFreeCanvas();
     else if (action === 'stamp-category') { state.stampCategory = button.dataset.category; renderPanel(); }
@@ -1046,6 +1840,14 @@
       state.smoothStrength = Number(range.value);
       const output = range.parentElement.querySelector('output');
       if (output) output.textContent = range.value;
+    } else if (range.dataset.range === 'wheel-speed') {
+      state.wheelSpeed = Number(range.value) / 100;
+      const output = range.parentElement.querySelector('output');
+      if (output) output.textContent = range.value + '%';
+    } else if (range.dataset.range === 'pinch-force') {
+      state.pinchForce = Number(range.value) / 100;
+      const output = range.parentElement.querySelector('output');
+      if (output) output.textContent = range.value + '%';
     } else if (range.dataset.range === 'mouth-size') {
       state.mouth.diameter = Number(range.value) / 100;
       const output = range.parentElement.querySelector('output');
@@ -1065,7 +1867,11 @@
   }
 
   function deformLocal(v, angle, delta) {
+    if (!Number.isFinite(v) || !Number.isFinite(angle) || !Number.isFinite(delta)) return;
     const profile = state.phase === 'clay' ? state.rawProfile : state.profile;
+    if (state.phase !== 'clay' && Number.isFinite(delta)) {
+      state.shapeWork = clamp((state.shapeWork || 0) + Math.min(.03, Math.abs(delta) * 1.8), 0, 1);
+    }
     const center = clamp(Math.round(v * (profile.length - 1)), 1, profile.length - 2);
     for (let i = 0; i < profile.length; i += 1) {
       const distance = Math.abs(i - center) / (profile.length * .15);
@@ -1081,7 +1887,8 @@
   }
 
   function potteryPointerDown(event) {
-    if (event.button != null && event.button !== 0) return;
+    const rotateIntent = state.tool === 'rotate' || event.altKey || event.button === 2;
+    if (event.button != null && event.button !== 0 && !rotateIntent) return;
     if ((state.phase === 'clay' || state.phase === 'sculpt') && !state.wheelOn) {
       toast('请先打开转盘电源');
       return;
@@ -1090,16 +1897,26 @@
     pointerDownAt = performance.now();
     pointerStart = point;
     els.potteryCanvas.setPointerCapture(event.pointerId);
+    const hoverUv = renderer.screenToUv(point.x, point.y);
+    updateContactFromUv(
+      hoverUv,
+      state.phase === 'clay' ? '泥团受力 · 正在排出气泡' : state.wheelOn ? '按下捏压 · 移动改变器型' : '转盘关闭 · 触点预览',
+      true
+    );
 
-    if (state.tool === 'rotate') {
+    if (rotateIntent) {
       renderer.dragging = true;
       sculptDrag = { mode: 'rotate', lastX: point.x, lastY: point.y };
       els.studioStage.classList.add('rotating');
       return;
     }
     if (state.phase === 'clay' || state.phase === 'sculpt') {
-      if (state.phase === 'sculpt') pushHistory();
       const uv = renderer.screenToUv(point.x, point.y);
+      if (!uv.hit) {
+        setContactVisible(false);
+        return;
+      }
+      if (state.phase === 'sculpt') pushHistory('局部塑形');
       sculptDrag = { mode: 'sculpt', lastX: point.x, lastY: point.y, uv, moved: 0 };
       return;
     }
@@ -1108,24 +1925,47 @@
         painting = true;
         freePainting = state.decorMode === 'free';
         if (freePainting) {
+          pushHistory('自由画布笔触');
           renderer.endFreeStroke();
           renderer.freePaintAt(point.x, point.y, selectedColor().hex, state.brushSize);
           state.freeArtwork = true;
         } else {
+          const uv = renderer.screenToUv(point.x, point.y);
+          if (!uv.hit) {
+            painting = false;
+            freePainting = false;
+            setContactVisible(false);
+            return;
+          }
+          pushHistory('器表彩绘笔触');
           renderer.lastPaint = null;
           renderer.paintAt(point.x, point.y, selectedColor().hex, state.brushSize);
           state.surfaceArtwork = true;
         }
         state.hasArtwork = true;
       } else {
+        const uv = renderer.screenToUv(point.x, point.y);
+        if (!uv.hit) {
+          setContactVisible(false);
+          return;
+        }
         sculptDrag = { mode: 'tap', lastX: point.x, lastY: point.y, moved: 0 };
       }
     }
   }
 
   function potteryPointerMove(event) {
-    if (!sculptDrag && !painting) return;
     const point = canvasCoords(event);
+    if (!sculptDrag && !painting) {
+      if (state.phase === 'clay' || state.phase === 'sculpt' || state.phase === 'decorate') {
+        updateContactFromUv(
+          renderer.screenToUv(point.x, point.y),
+          state.wheelOn ? '触点预览 · 按住开始操作' : '转盘关闭 · 触点预览',
+          false
+        );
+      }
+      return;
+    }
     if (sculptDrag && sculptDrag.mode === 'rotate') {
       const dx = point.x - sculptDrag.lastX;
       const dy = point.y - (sculptDrag.lastY == null ? point.y : sculptDrag.lastY);
@@ -1141,10 +1981,22 @@
       sculptDrag.moved += Math.abs(dx) + Math.abs(dy);
       if (Math.abs(dx) > .4 || Math.abs(dy) > .4) {
         const uv = renderer.screenToUv(point.x, point.y);
-        deformLocal(uv.v, uv.angle, dx * .0022);
+        if (uv.hit) sculptDrag.uv = uv;
+        const activeUv = sculptDrag.uv;
+        if (!activeUv) return;
+        if (uv.hit) deformLocal(uv.v, uv.angle, dx * .0022 * state.pinchForce);
         if (state.phase === 'clay') {
           state.knead = clamp(state.knead + Math.abs(dx) * .16 + Math.abs(dy) * .1, 0, 100);
           updateKneadUi();
+          updateContactFromUv(uv.hit ? uv : activeUv, '揉泥中 · 含水与受力实时变化', true);
+        } else {
+          state.heightFactor = clamp(state.heightFactor - dy * .0012 * state.pinchForce, .62, 1.02);
+          state.shapeWork = clamp((state.shapeWork || 0) + Math.abs(dy) * .001, 0, 1);
+          state.throwProgress = throwPercent();
+          state.edgeSmoothed = false;
+          syncRenderer();
+          updateSculptProgressUi();
+          updateContactFromUv(uv.hit ? uv : activeUv, '捏合拖动 · 器型 ' + state.throwProgress + '%', true);
         }
       }
       sculptDrag.lastX = point.x;
@@ -1152,7 +2004,12 @@
       return;
     }
     if (painting && state.decorMode === 'paint') {
-      renderer.paintAt(point.x, point.y, selectedColor().hex, state.brushSize);
+      const uv = renderer.paintAt(point.x, point.y, selectedColor().hex, state.brushSize);
+      if (!uv) {
+        renderer.endStroke();
+        painting = false;
+        setContactVisible(false);
+      }
     } else if (painting && state.decorMode === 'free') {
       renderer.freePaintAt(point.x, point.y, selectedColor().hex, state.brushSize);
     }
@@ -1172,11 +2029,16 @@
       } else if (state.decorMode === 'stamp') {
         const stamp = D.STAMPS.find(s => s.id === state.stampId);
         if (stamp) {
-          renderer.stampAt(event.clientX, event.clientY, stamp.draw, state.stampColor, state.stampSize);
-          state.surfaceArtwork = true;
-          state.hasArtwork = true;
-          renderPanel();
-          toast(stamp.name + '已贴到陶器表面');
+          const uv = renderer.screenToUv(event.clientX, event.clientY);
+          if (uv.hit) {
+            pushHistory('器表贴花');
+            renderer.stampAt(event.clientX, event.clientY, stamp.draw, state.stampColor, state.stampSize);
+            state.surfaceArtwork = true;
+            state.hasArtwork = true;
+            renderPanel();
+            updateHistoryButtons();
+            toast(stamp.name + '已贴到陶器表面');
+          }
         }
       }
     }
@@ -1186,10 +2048,13 @@
       painting = false;
       freePainting = false;
       renderPanel();
+      updateHistoryButtons();
     }
     if (state.phase === 'clay' && state.knead >= 100) renderPanel();
+    if (state.phase === 'sculpt') updateSculptProgressUi();
     renderer.dragging = false;
     sculptDrag = null;
+    els.contactFeedback.classList.remove('pinching');
     els.studioStage.classList.remove('rotating');
   }
 
@@ -1215,8 +2080,27 @@
     });
     els.wheelPowerBtn.addEventListener('click', togglePower);
     els.cameraBtn.addEventListener('click', toggleCamera);
+    els.cameraTogglePanelBtn.addEventListener('click', () => {
+      const expanded = els.cameraBody.hidden;
+      if (expanded) closeWorkshopDrawers();
+      setCameraPanelExpanded(expanded);
+    });
+    els.calibrateHandsBtn.addEventListener('click', calibrateHands);
+    els.handDiagnosticsBtn.addEventListener('click', () => {
+      els.handDiagnostics.hidden = !els.handDiagnostics.hidden;
+      els.handDiagnosticsBtn.setAttribute('aria-expanded', String(!els.handDiagnostics.hidden));
+    });
     els.refreshCameraBtn.addEventListener('click', refreshCameraDevices);
     els.demoHandsBtn.addEventListener('click', toggleDemoHands);
+    els.materialsToggleBtn.addEventListener('click', () => {
+      setWorkshopDrawer(document.body.classList.contains('materials-open') ? null : 'materials');
+    });
+    els.panelToggleBtn.addEventListener('click', () => {
+      setWorkshopDrawer(document.body.classList.contains('panel-open') ? null : 'panel');
+    });
+    els.quickWheelBtn.addEventListener('click', togglePower);
+    els.leftDrawerCloseBtn.addEventListener('click', closeWorkshopDrawers);
+    els.panelCloseBtn.addEventListener('click', closeWorkshopDrawers);
     els.panelContent.addEventListener('click', handlePanelClick);
     els.panelContent.addEventListener('input', handlePanelInput);
     document.querySelectorAll('#viewModes [data-tool]').forEach(button => {
@@ -1227,14 +2111,11 @@
     });
     els.smoothBtn.addEventListener('click', smoothEdges);
     els.undoBtn.addEventListener('click', undo);
-    els.centerViewBtn.addEventListener('click', () => {
-      renderer.setView(-.36, .22);
-      toast('已回到正视角度');
-    });
-    els.topViewBtn.addEventListener('click', () => {
-      renderer.setView(-.36, 1.18);
-      toast('已切换俯视，可检查口沿与内壁');
-    });
+    els.redoBtn.addEventListener('click', redo);
+    els.centerViewBtn.addEventListener('click', () => setViewMode('center'));
+    els.quarterViewBtn.addEventListener('click', () => setViewMode('quarter'));
+    els.topViewBtn.addEventListener('click', () => setViewMode('top'));
+    els.backPhaseBtn.addEventListener('click', goPreviousPhase);
     els.presentationBtn.addEventListener('click', async () => {
       try {
         if (!document.fullscreenElement) {
@@ -1250,21 +2131,45 @@
     els.resetBtn.addEventListener('click', () => resetGame(false));
     els.exportBtn.addEventListener('click', saveImage);
     els.saveResultBtn.addEventListener('click', saveImage);
+    els.resultAnglePicker.addEventListener('click', event => {
+      const button = event.target.closest('[data-export-angle]');
+      if (!button) return;
+      setResultAngle(button.dataset.exportAngle);
+    });
     els.restartBtn.addEventListener('click', () => resetGame(true));
+    els.nextOrderBtn.addEventListener('click', () => resetGame(true, true));
     els.closeModalBtn.addEventListener('click', closeModal);
     els.modal.addEventListener('click', event => { if (event.target === els.modal) closeModal(); });
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && !els.modal.hidden) closeModal();
+      else if (event.key === 'Escape' && (document.body.classList.contains('materials-open') || document.body.classList.contains('panel-open'))) {
+        closeWorkshopDrawers();
+      }
+      if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      }
     });
     els.potteryCanvas.addEventListener('pointerdown', potteryPointerDown);
     els.potteryCanvas.addEventListener('pointermove', potteryPointerMove);
     els.potteryCanvas.addEventListener('pointerup', potteryPointerUp);
     els.potteryCanvas.addEventListener('pointercancel', potteryPointerUp);
+    els.potteryCanvas.addEventListener('pointerleave', () => {
+      if (!sculptDrag && !painting) setContactVisible(false);
+    });
+    els.potteryCanvas.addEventListener('wheel', event => {
+      if (!['sculpt', 'decorate'].includes(state.phase)) return;
+      event.preventDefault();
+      renderer.rotateBy(event.deltaY * .0018);
+    }, { passive: false });
+    els.potteryCanvas.addEventListener('contextmenu', event => event.preventDefault());
+    window.addEventListener('resize', clearClayHandOverlay);
     els.phases.forEach(button => {
       button.addEventListener('click', () => {
-        if (button.classList.contains('done') && button.dataset.phase !== 'bisque' && button.dataset.phase !== 'fire') {
-          setPhase(button.dataset.phase);
-        }
+        const targetIndex = phaseOrder.indexOf(button.dataset.phase);
+        const currentIndex = phaseOrder.indexOf(state.phase);
+        if (targetIndex >= 0 && targetIndex < currentIndex) returnToPhase(button.dataset.phase);
       });
     });
   }

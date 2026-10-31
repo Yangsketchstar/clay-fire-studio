@@ -35,7 +35,7 @@
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.rotation = -0.36;
-      this.pitch = 0.34;
+      this.pitch = 0.48;
       this.minPitch = 0.06;
       this.maxPitch = 1.26;
       this.velocity = 0;
@@ -116,11 +116,48 @@
       this.lastFreePoint = null;
     }
 
+    captureHistoryState() {
+      const freeSnapshot = document.createElement('canvas');
+      freeSnapshot.width = this.freeCanvas.width;
+      freeSnapshot.height = this.freeCanvas.height;
+      freeSnapshot.getContext('2d').drawImage(this.freeCanvas, 0, 0);
+      return {
+        surfaceDecorations: this.surfaceDecorations.map(decal => ({
+          ...decal,
+          points: decal.points ? decal.points.map(point => ({ ...point })) : undefined
+        })),
+        freeCanvas: freeSnapshot
+      };
+    }
+
+    restoreHistoryState(snapshot) {
+      if (!snapshot) return;
+      this.surfaceDecorations = snapshot.surfaceDecorations.map(decal => ({
+        ...decal,
+        points: decal.points ? decal.points.map(point => ({ ...point })) : undefined
+      }));
+      this.activeSurfaceStroke = null;
+      this.lastPaint = null;
+      this.freeCtx.clearRect(0, 0, this.width, this.height);
+      if (snapshot.freeCanvas) {
+        this.freeCtx.drawImage(snapshot.freeCanvas, 0, 0, this.width, this.height);
+      }
+      this.lastFreePoint = null;
+      this.refreshTexture();
+    }
+
     loop(time) {
       const delta = Math.min(40, time - this.lastTime);
       this.lastTime = time;
       if (!this.dragging) {
         this.rotation += this.velocity * delta;
+        if (
+          this.state &&
+          this.state.wheelOn &&
+          (this.state.phase === 'clay' || this.state.phase === 'sculpt')
+        ) {
+          this.rotation += 0.00022 * delta * clamp(this.state.wheelSpeed || 1, .25, 2.5);
+        }
         this.velocity *= Math.pow(0.92, delta / 16);
         if (Math.abs(this.velocity) < 0.000002) this.velocity = 0;
       }
@@ -205,12 +242,16 @@
     geometry() {
       const rawClay = this.state && this.state.rawClay;
       const radiusScale = Math.min(this.width, this.height) * (rawClay ? 0.26 : 0.34);
+      const heightFactor = clamp(this.state && this.state.heightFactor ? this.state.heightFactor : 1, .52, 1.12);
+      const baseBottom = rawClay ? 88 : 158;
+      const baseSpan = rawClay ? 176 : 316;
+      const span = baseSpan * heightFactor;
       return {
         cx: this.width * 0.5,
         cy: this.height * (rawClay ? 0.62 : 0.55),
         centerY: 0,
-        top: rawClay ? -88 : -158,
-        span: rawClay ? 176 : 316,
+        top: baseBottom - span,
+        span,
         radiusScale,
         focal: radiusScale * 5.7,
         camera: radiusScale * 5.7
@@ -229,6 +270,24 @@
       else if (region === 'foot' && state.glaze && state.glaze.foot) { glazeColor = state.glaze.foot; glazed = true; }
       else if (state.glaze && state.glaze.body) { glazeColor = state.glaze.body; glazed = true; }
       if (glazeColor) color = hexRgb(glazeColor.hex);
+      if (glazeColor && glazeColor.secondary) {
+        const accent = hexRgb(glazeColor.secondary);
+        const pattern = glazeColor.pattern || 'gradient';
+        if (pattern === 'gradient') {
+          color = mixRgb(color, accent, clamp((v - .06) / .82, 0, 1) * .62);
+        } else if (pattern === 'marble') {
+          const marble = .5 + Math.sin(u * Math.PI * 10 + v * Math.PI * 5) * .5;
+          color = mixRgb(color, accent, marble * .34);
+        } else if (pattern === 'drip') {
+          color = mixRgb(color, accent, clamp((.48 - v) * 1.4, 0, 1) * .35);
+        } else if (pattern === 'speckle') {
+          const grain = Math.sin(u * 711 + v * 419) * .5 + .5;
+          color = mixRgb(color, accent, grain > .78 ? .42 : grain < .2 ? .12 : 0);
+        } else if (pattern === 'crystal') {
+          const crystal = Math.sin(u * 823 + v * 517) * Math.sin(v * 731);
+          color = mixRgb(color, accent, crystal > .62 ? .34 : 0);
+        }
+      }
       if (glazed && !state.finalized) color = mixRgb(color, hexRgb(clay.base), .1);
       if (!glazed && state.bisqueDone && !state.finalized) color = mixRgb(color, { r: 245, g: 230, b: 205 }, .12);
 
@@ -292,30 +351,48 @@
       const context = this.ctx;
       const width = this.width, height = this.height;
       const geometry = this.geometry();
-      const segments = 144;
-      const rings = Math.max(144, state.profile.length);
+      const segments = 168;
+      const rings = Math.max(160, state.profile.length);
       context.clearRect(0, 0, width, height);
 
-      const shadow = context.createRadialGradient(width * .5, height * .85, 10, width * .5, height * .85, geometry.radiusScale * 1.15);
-      shadow.addColorStop(0, 'rgba(63,37,24,.32)');
-      shadow.addColorStop(.46, 'rgba(63,37,24,.13)');
-      shadow.addColorStop(1, 'rgba(63,37,24,0)');
-      context.fillStyle = shadow;
-      context.beginPath();
-      context.ellipse(width * .5, height * .855, geometry.radiusScale * 1.1, geometry.radiusScale * .22, 0, 0, TAU);
-      context.fill();
-
-      context.strokeStyle = 'rgba(115,78,55,.18)';
-      context.lineWidth = 1;
-      for (let i = 0; i < 3; i += 1) {
+      if (!this.suppressShadow) {
+        const footPoint = this.project(0, 0, .95, geometry);
+        const footRadius = this.profileRadius(.95) * geometry.radiusScale;
+        context.save();
+        context.translate(footPoint.x + footRadius * .24, footPoint.y + footRadius * .018);
+        context.scale(1, .2 + Math.abs(Math.cos(this.pitch)) * .055);
+        const castShadow = context.createRadialGradient(0, 0, footRadius * .12, 0, 0, footRadius * 1.32);
+        castShadow.addColorStop(0, 'rgba(53,31,20,.3)');
+        castShadow.addColorStop(.5, 'rgba(62,37,24,.12)');
+        castShadow.addColorStop(1, 'rgba(62,37,24,0)');
+        context.fillStyle = castShadow;
         context.beginPath();
-        context.ellipse(width * .5, height * .84 + i * 4, geometry.radiusScale * (1.05 - i * .08), geometry.radiusScale * (.18 - i * .009), 0, 0, TAU);
-        context.stroke();
+        context.arc(0, 0, footRadius * 1.32, 0, TAU);
+        context.fill();
+        context.restore();
+
+        context.save();
+        context.translate(footPoint.x + footRadius * .06, footPoint.y + footRadius * .006);
+        context.scale(1, .095 + Math.abs(Math.cos(this.pitch)) * .025);
+        const contactShadow = context.createRadialGradient(0, 0, footRadius * .08, 0, 0, footRadius * .82);
+        contactShadow.addColorStop(0, 'rgba(37,22,15,.5)');
+        contactShadow.addColorStop(.58, 'rgba(49,29,18,.22)');
+        contactShadow.addColorStop(1, 'rgba(49,29,18,0)');
+        context.fillStyle = contactShadow;
+        context.beginPath();
+        context.arc(0, 0, footRadius * .82, 0, TAU);
+        context.fill();
+        context.restore();
+      }
+
+      if (state.rawClay) {
+        this.drawRawClayForm(context, geometry);
+        this.drawClayTop(context, geometry);
+        return;
       }
 
       this.drawHandles(context, geometry, false);
       this.drawBottomCap(context, geometry);
-      this.drawFoot(context, geometry);
 
       const vertices = [];
       for (let i = 0; i < rings; i += 1) {
@@ -354,14 +431,18 @@
         if (normal[2] > 0) normal = [-normal[0], -normal[1], -normal[2]];
         const diffuse = Math.max(0, normal[0] * light[0] + normal[1] * light[1] + normal[2] * light[2]);
         const edgeOcclusion = .975 + Math.sin(v * Math.PI) * .025;
-        const shade = (.78 + diffuse * .24) * edgeOcclusion;
+        const shade = state.rawClay
+          ? (.86 + diffuse * .14) * edgeOcclusion
+          : (.78 + diffuse * .24) * edgeOcclusion;
         const specular = material.glazed ? Math.pow(diffuse, 18 + material.finish.specular * 42) * material.finish.specular * (.35 + (state.gloss == null ? .5 : state.gloss) * .9) : 0;
-        const r = material.color.r * shade + 255 * specular;
-        const g = material.color.g * shade + 255 * specular;
-        const b = material.color.b * shade + 255 * specular;
+        const fresnel = material.glazed ? Math.pow(1 - Math.min(1, Math.abs(normal[2])), 2) : 0;
+        const edgeGlow = fresnel * (0.035 + (state.gloss == null ? .5 : state.gloss) * .085);
+        const r = material.color.r * shade + 255 * specular + 205 * edgeGlow;
+        const g = material.color.g * shade + 255 * specular + 238 * edgeGlow;
+        const b = material.color.b * shade + 255 * specular + 226 * edgeGlow;
         context.fillStyle = rgbColor(r, g, b);
         context.strokeStyle = context.fillStyle;
-        context.lineWidth = .7;
+        context.lineWidth = state.rawClay ? .9 : 0;
         context.beginPath();
         context.moveTo(face.a.x, face.a.y);
         context.lineTo(face.b.x, face.b.y);
@@ -369,7 +450,7 @@
         context.lineTo(face.d.x, face.d.y);
         context.closePath();
         context.fill();
-        context.stroke();
+        if (state.rawClay) context.stroke();
       }
 
       this.drawFormLight(context, geometry);
@@ -379,6 +460,58 @@
       else this.drawMouth(context, geometry);
       this.drawSurfaceEffects(context, geometry);
       if (this.freeCanvas) context.drawImage(this.freeCanvas, 0, 0, this.width, this.height);
+    }
+
+    drawRawClayForm(context, geometry) {
+      const state = this.state;
+      const clay = hexRgb(state.clay.base);
+      const light = hexRgb(state.clay.light);
+      const deep = hexRgb(state.clay.deep);
+      this.silhouettePath(context, geometry);
+      const bodyGradient = context.createLinearGradient(
+        geometry.cx - geometry.radiusScale,
+        geometry.cy - geometry.span * .35,
+        geometry.cx + geometry.radiusScale,
+        geometry.cy + geometry.span * .35
+      );
+      bodyGradient.addColorStop(0, rgbColor(light.r, light.g, light.b));
+      bodyGradient.addColorStop(.46, rgbColor(clay.r, clay.g, clay.b));
+      bodyGradient.addColorStop(1, rgbColor(deep.r * .82, deep.g * .8, deep.b * .78));
+      context.fillStyle = bodyGradient;
+      context.fill();
+      context.strokeStyle = 'rgba(85,51,33,.18)';
+      context.lineWidth = 1;
+      context.stroke();
+
+      context.save();
+      this.silhouettePath(context, geometry);
+      context.clip();
+      const shine = context.createRadialGradient(
+        geometry.cx - geometry.radiusScale * .32,
+        geometry.cy - geometry.span * .18,
+        2,
+        geometry.cx - geometry.radiusScale * .18,
+        geometry.cy - geometry.span * .1,
+        geometry.radiusScale * .72
+      );
+      shine.addColorStop(0, 'rgba(255,244,226,.46)');
+      shine.addColorStop(.52, 'rgba(255,238,216,.08)');
+      shine.addColorStop(1, 'rgba(65,36,24,.08)');
+      context.fillStyle = shine;
+      context.fillRect(0, 0, this.width, this.height);
+
+      const rand = seeded(31415);
+      context.strokeStyle = 'rgba(91,55,36,.1)';
+      context.lineWidth = 1.1;
+      for (let i = 0; i < 7; i += 1) {
+        const x = geometry.cx + (rand() - .5) * geometry.radiusScale * 1.15;
+        const y = geometry.cy + (rand() - .48) * geometry.span * .58;
+        context.beginPath();
+        context.moveTo(x - 9, y);
+        context.quadraticCurveTo(x, y - 2 + rand() * 4, x + 9, y + rand() * 2 - 1);
+        context.stroke();
+      }
+      context.restore();
     }
 
     surfacePoint(angle, v, geometry, scaleOffset) {
@@ -521,8 +654,14 @@
       const rim = state.glaze && state.glaze.rim ? hexRgb(state.glaze.rim.hex) : { r: 185, g: 117, b: 82 };
       const inside = state.glaze && state.glaze.inside ? hexRgb(state.glaze.inside.hex) : { r: 74, g: 49, b: 39 };
       const style = mouth.style || 'round';
-      const innerRatio = clamp(1 - mouth.rim, .5, .9);
-      const depth = clamp(mouth.depth, .15, .8);
+      const formingProgress = clamp((state.throwProgress == null ? 100 : state.throwProgress) / 100, 0, 1);
+      const opening = formingProgress * formingProgress * (3 - 2 * formingProgress);
+      const innerRatio = state.phase === 'sculpt'
+        ? lerp(.08, clamp(1 - mouth.rim, .5, .9), opening)
+        : clamp(1 - mouth.rim, .5, .9);
+      const depth = state.phase === 'sculpt'
+        ? lerp(.03, clamp(mouth.depth, .15, .8), opening)
+        : clamp(mouth.depth, .15, .8);
       const styleScale = style === 'flare' ? 1.035 : style === 'inward' ? .975 : 1;
       const innerR = topR * innerRatio;
       const floorR = innerR * lerp(.82, .58, depth);
@@ -636,17 +775,24 @@
       const segments = 64;
       for (let i = 0; i < 72; i += 1) {
         const v = i / 71;
-        const radius = this.profileRadius(v) * geometry.radiusScale;
-        let min = Infinity, max = -Infinity, cy = 0;
+        let minPoint = null;
+        let maxPoint = null;
         for (let j = 0; j < segments; j += 1) {
           const angle = j / segments * TAU;
           const p = this.project(this.deformedRadius(v, angle) * geometry.radiusScale, angle, v, geometry);
-          if (p.x < min) min = p.x;
-          if (p.x > max) max = p.x;
-          cy = p.y;
+          if (!minPoint || p.x < minPoint.x) minPoint = p;
+          if (!maxPoint || p.x > maxPoint.x) maxPoint = p;
         }
-        left.push({ x: min, y: cy });
-        right.push({ x: max, y: cy });
+        left.push({ x: minPoint.x, y: minPoint.y });
+        right.push({ x: maxPoint.x, y: maxPoint.y });
+      }
+      for (let pass = 0; pass < 3; pass += 1) {
+        for (let i = 1; i < left.length - 1; i += 1) {
+          left[i].x = left[i - 1].x * .18 + left[i].x * .64 + left[i + 1].x * .18;
+          left[i].y = left[i - 1].y * .18 + left[i].y * .64 + left[i + 1].y * .18;
+          right[i].x = right[i - 1].x * .18 + right[i].x * .64 + right[i + 1].x * .18;
+          right[i].y = right[i - 1].y * .18 + right[i].y * .64 + right[i + 1].y * .18;
+        }
       }
       context.beginPath();
       context.moveTo(left[0].x, left[0].y);
@@ -701,6 +847,84 @@
         glint.addColorStop(1, 'rgba(255,255,255,0)');
         context.fillStyle = glint;
         context.fillRect(0, 0, this.width, this.height);
+
+        const rim = this.uvToScreen(.5, .08);
+        const foot = this.uvToScreen(.5, .9);
+        if (rim && foot) {
+          const thickness = context.createLinearGradient(0, rim.y, 0, foot.y);
+          thickness.addColorStop(0, 'rgba(40,32,26,' + (.16 + gloss * .1).toFixed(3) + ')');
+          thickness.addColorStop(.1, 'rgba(255,255,248,.08)');
+          thickness.addColorStop(.46, 'rgba(255,255,255,0)');
+          thickness.addColorStop(.82, 'rgba(78,52,38,.035)');
+          thickness.addColorStop(1, 'rgba(49,34,26,.2)');
+          context.fillStyle = thickness;
+          context.fillRect(0, rim.y, this.width, Math.max(0, foot.y - rim.y));
+        }
+
+        context.save();
+        context.translate(geometry.cx - geometry.radiusScale * .33, geometry.cy - geometry.radiusScale * .5);
+        context.rotate(-.11);
+        const windowSheen = context.createLinearGradient(0, 0, 42, 0);
+        windowSheen.addColorStop(0, 'rgba(255,255,250,0)');
+        windowSheen.addColorStop(.42, 'rgba(255,255,250,' + (.09 + gloss * .16).toFixed(3) + ')');
+        windowSheen.addColorStop(.62, 'rgba(235,248,246,' + (.06 + gloss * .1).toFixed(3) + ')');
+        windowSheen.addColorStop(1, 'rgba(255,255,255,0)');
+        context.fillStyle = windowSheen;
+        context.fillRect(-14, 0, 58, Math.max(80, geometry.span * .62));
+        context.fillStyle = 'rgba(255,255,250,' + (.055 + gloss * .075).toFixed(3) + ')';
+        context.fillRect(58, 46, 15, Math.max(52, geometry.span * .34));
+        context.restore();
+
+        this.silhouettePath(context, geometry);
+        context.strokeStyle = 'rgba(255,250,234,' + (.1 + gloss * .1).toFixed(3) + ')';
+        context.lineWidth = 1.3;
+        context.stroke();
+      }
+
+      const glazePattern = state.glaze && state.glaze.body && state.glaze.body.pattern;
+      if (bodyGlazed && glazePattern === 'drip') {
+        const rand = seeded(337);
+        for (let i = 0; i < 11; i += 1) {
+          const x = this.width * (.24 + rand() * .52);
+          const length = 34 + rand() * 92;
+          const drip = context.createLinearGradient(x, this.height * .25, x, this.height * .25 + length);
+          drip.addColorStop(0, 'rgba(255,250,235,.4)');
+          drip.addColorStop(.18, 'rgba(246,238,215,.22)');
+          drip.addColorStop(.72, 'rgba(240,230,203,.1)');
+          drip.addColorStop(1, 'rgba(255,248,229,0)');
+          context.fillStyle = drip;
+          context.beginPath();
+          context.ellipse(x, this.height * .25 + length * .42, 1.6 + rand() * 1.8, length * .44, 0, 0, TAU);
+          context.fill();
+        }
+      }
+      if (bodyGlazed && (glazePattern === 'speckle' || glazePattern === 'crystal')) {
+        const rand = seeded(glazePattern === 'crystal' ? 733 : 417);
+        for (let i = 0; i < 72; i += 1) {
+          context.fillStyle = glazePattern === 'crystal'
+            ? 'rgba(255,253,236,' + (.12 + rand() * .24).toFixed(2) + ')'
+            : 'rgba(74,64,48,' + (.08 + rand() * .17).toFixed(2) + ')';
+          context.beginPath();
+          context.arc(
+            this.width * (.22 + rand() * .56),
+            this.height * (.25 + rand() * .56),
+            .45 + rand() * (glazePattern === 'crystal' ? 2.1 : 1.2),
+            0,
+            TAU
+          );
+          context.fill();
+        }
+      }
+      if (bodyGlazed && glazePattern === 'marble') {
+        context.strokeStyle = 'rgba(255,252,239,.12)';
+        context.lineWidth = 1.2;
+        for (let i = 0; i < 7; i += 1) {
+          const y = this.height * (.3 + i * .055);
+          context.beginPath();
+          context.moveTo(this.width * .25, y);
+          context.bezierCurveTo(this.width * .4, y - 17, this.width * .55, y + 18, this.width * .76, y - 4);
+          context.stroke();
+        }
       }
 
       context.save();
@@ -711,10 +935,10 @@
 
       if (!bodyGlazed) {
         const rand = seeded(state.finalized ? 2017 : 111);
-        context.fillStyle = state.finalized ? 'rgba(62,40,27,.16)' : 'rgba(91,57,38,.1)';
-        for (let i = 0; i < 80; i += 1) {
+        context.fillStyle = state.finalized ? 'rgba(62,40,27,.15)' : 'rgba(91,57,38,.085)';
+        for (let i = 0; i < 140; i += 1) {
           context.beginPath();
-          context.arc(this.width * (.2 + rand() * .6), this.height * (.25 + rand() * .56), .35 + rand() * 1.1, 0, TAU);
+          context.arc(this.width * (.2 + rand() * .6), this.height * (.22 + rand() * .6), .3 + rand() * 1.25, 0, TAU);
           context.fill();
         }
       }
@@ -787,30 +1011,101 @@
       const rect = this.canvas.getBoundingClientRect();
       const x = clientX - rect.left;
       const y = clientY - rect.top;
+      return this.screenPointToUv(x, y);
+    }
+
+    screenPointToUv(x, y) {
       const geometry = this.geometry();
-      const maxRadius = Math.max(...this.state.profile) * geometry.radiusScale;
-      const rel = clamp((x - geometry.cx) / Math.max(24, maxRadius * 1.04), -.97, .97);
-      const angle = Math.PI * 1.5 + Math.asin(rel) - this.rotation;
-      let low = 0;
-      let high = 1;
-      for (let i = 0; i < 16; i += 1) {
-        const mid = (low + high) * .5;
-        const point = this.project(this.deformedRadius(mid, angle) * geometry.radiusScale, angle, mid, geometry);
-        if (point.y < y) low = mid;
-        else high = mid;
+      const ringSamples = 64;
+      const angleSamples = 96;
+      let best = null;
+      let bestDistance = Infinity;
+      let bestV = 0;
+      let bestAngle = 0;
+
+      for (let ring = 0; ring <= ringSamples; ring += 1) {
+        const v = ring / ringSamples;
+        for (let segment = 0; segment < angleSamples; segment += 1) {
+          const angle = segment / angleSamples * TAU;
+          const point = this.project(
+            this.deformedRadius(v, angle) * geometry.radiusScale,
+            angle,
+            v,
+            geometry
+          );
+          if (point.z > geometry.radiusScale * .08) continue;
+          const distance = (point.x - x) ** 2 + (point.y - y) ** 2;
+          if (distance < bestDistance) {
+            best = point;
+            bestDistance = distance;
+            bestV = v;
+            bestAngle = angle;
+          }
+        }
       }
-      const v = clamp((low + high) * .5, .01, .99);
+
+      if (best) {
+        const vStart = clamp(bestV - .035, 0, 1);
+        const vEnd = clamp(bestV + .035, 0, 1);
+        const angleStart = bestAngle - .12;
+        const angleEnd = bestAngle + .12;
+        for (let vi = 0; vi <= 8; vi += 1) {
+          const v = lerp(vStart, vEnd, vi / 8);
+          for (let ai = 0; ai <= 8; ai += 1) {
+            const angle = lerp(angleStart, angleEnd, ai / 8);
+            const point = this.project(
+              this.deformedRadius(v, angle) * geometry.radiusScale,
+              angle,
+              v,
+              geometry
+            );
+            if (point.z > geometry.radiusScale * .08) continue;
+            const distance = (point.x - x) ** 2 + (point.y - y) ** 2;
+            if (distance < bestDistance) {
+              best = point;
+              bestDistance = distance;
+              bestV = v;
+              bestAngle = angle;
+            }
+          }
+        }
+      }
+
+      const hitRadius = Math.max(16, geometry.radiusScale * .06);
+      const hit = !!best && bestDistance <= hitRadius * hitRadius;
+      if (!hit) {
+        return { hit: false, x, y };
+      }
       return {
-        u: ((angle % TAU) + TAU) % TAU / TAU,
-        v,
-        angle,
+        hit: true,
+        u: ((bestAngle % TAU) + TAU) % TAU / TAU,
+        v: bestV,
+        angle: bestAngle,
         x,
-        y
+        y,
+        screenX: best.x,
+        screenY: best.y,
+        z: best.z
+      };
+    }
+
+    uvToScreen(u, v) {
+      if (!this.state || !this.state.profile) return null;
+      const geometry = this.geometry();
+      const angle = (((u % 1) + 1) % 1) * TAU;
+      const point = this.surfacePoint(angle, clamp(v, 0, 1), geometry);
+      return {
+        x: point.x,
+        y: point.y,
+        z: point.z,
+        angle,
+        v: clamp(v, 0, 1)
       };
     }
 
     paintAt(clientX, clientY, color, brushWidth) {
       const uv = this.screenToUv(clientX, clientY);
+      if (!uv.hit) return null;
       if (!this.activeSurfaceStroke) {
         this.activeSurfaceStroke = {
           type: 'stroke',
@@ -833,6 +1128,7 @@
 
     stampAt(clientX, clientY, drawFn, color, size) {
       const uv = this.screenToUv(clientX, clientY);
+      if (!uv.hit) return null;
       this.stampUv(uv.u, uv.v, drawFn, color, size);
       return uv;
     }
@@ -885,29 +1181,136 @@
       this.lastFreePoint = null;
     }
 
-    exportPng() {
+    exportPng(view) {
+      const viewAngles = {
+        front: [-.36, .08],
+        side: [.92, .25],
+        top: [-.36, 1.18]
+      };
+      const selectedView = viewAngles[view] ? view : 'side';
+      const selectedAngles = viewAngles[selectedView];
+      const angleLabel = { front: '正面', side: '侧面', top: '俯视' }[selectedView];
+      const original = {
+        canvas: this.canvas,
+        ctx: this.ctx,
+        width: this.width,
+        height: this.height,
+        dpr: this.dpr,
+        grainPattern: this.grainPattern,
+        suppressShadow: this.suppressShadow,
+        rotation: this.rotation,
+        pitch: this.pitch,
+        velocity: this.velocity
+      };
+      this.rotation = selectedAngles[0];
+      this.pitch = selectedAngles[1];
+      this.velocity = 0;
+      const artCanvas = document.createElement('canvas');
+      artCanvas.width = 2400;
+      artCanvas.height = 1800;
+      const artContext = artCanvas.getContext('2d');
+      this.canvas = artCanvas;
+      this.ctx = artContext;
+      this.width = artCanvas.width;
+      this.height = artCanvas.height;
+      this.dpr = 1;
+      this.grainPattern = artContext.createPattern(this.grainCanvas, 'repeat');
+      artContext.setTransform(1, 0, 0, 1, 0, 0);
+      artContext.imageSmoothingEnabled = true;
+      artContext.imageSmoothingQuality = 'high';
+      this.suppressShadow = true;
+      this.draw();
+      this.suppressShadow = original.suppressShadow;
+      this.canvas = original.canvas;
+      this.ctx = original.ctx;
+      this.width = original.width;
+      this.height = original.height;
+      this.dpr = original.dpr;
+      this.grainPattern = original.grainPattern;
+      this.rotation = original.rotation;
+      this.pitch = original.pitch;
+      this.velocity = original.velocity;
+
+      const pixels = artContext.getImageData(0, 0, artCanvas.width, artCanvas.height).data;
+      let minX = artCanvas.width;
+      let minY = artCanvas.height;
+      let maxX = 0;
+      let maxY = 0;
+      for (let y = 0; y < artCanvas.height; y += 2) {
+        for (let x = 0; x < artCanvas.width; x += 2) {
+          if (pixels[(y * artCanvas.width + x) * 4 + 3] < 8) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      const hasArtwork = maxX > minX && maxY > minY;
+      const cropX = hasArtwork ? Math.max(0, minX - 72) : 0;
+      const cropY = hasArtwork ? Math.max(0, minY - 72) : 0;
+      const cropWidth = hasArtwork ? Math.min(artCanvas.width - cropX, maxX - minX + 144) : artCanvas.width;
+      const cropHeight = hasArtwork ? Math.min(artCanvas.height - cropY, maxY - minY + 144) : artCanvas.height;
+
       const output = document.createElement('canvas');
-      output.width = 1200;
-      output.height = 1200;
+      output.width = 2400;
+      output.height = 2400;
       const ctx = output.getContext('2d');
-      const bg = ctx.createRadialGradient(560, 430, 30, 600, 600, 790);
-      bg.addColorStop(0, '#fff9ed');
-      bg.addColorStop(.66, '#eedcc4');
-      bg.addColorStop(1, '#d7bb96');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      const bg = ctx.createRadialGradient(850, 620, 40, 1200, 1060, 1720);
+      bg.addColorStop(0, '#fffdf7');
+      bg.addColorStop(.56, '#f1e3ce');
+      bg.addColorStop(1, '#cab08d');
       ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, 1200, 1200);
-      const fit = Math.min(960 / this.canvas.width, 790 / this.canvas.height);
+      ctx.fillRect(0, 0, output.width, output.height);
+      const halo = ctx.createRadialGradient(1200, 980, 90, 1200, 1080, 720);
+      halo.addColorStop(0, 'rgba(255,255,250,.72)');
+      halo.addColorStop(1, 'rgba(255,255,250,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, output.width, output.height);
+
+      const fit = Math.min(1940 / cropWidth, 1660 / cropHeight);
+      const drawWidth = cropWidth * fit;
+      const drawHeight = cropHeight * fit;
+      const destinationX = (output.width - drawWidth) * .5;
+      const destinationY = 1030 - drawHeight * .5;
+
       ctx.save();
-      ctx.translate(600 - this.canvas.width * fit * .5, 555 - this.canvas.height * fit * .5);
-      ctx.drawImage(this.canvas, 0, 0, this.canvas.width * fit, this.canvas.height * fit);
+      ctx.translate(destinationX + drawWidth * .53, destinationY + drawHeight * .88);
+      ctx.scale(1, .24);
+      const cast = ctx.createRadialGradient(0, 0, drawWidth * .08, 0, 0, drawWidth * .48);
+      cast.addColorStop(0, 'rgba(62,38,24,.25)');
+      cast.addColorStop(.52, 'rgba(62,38,24,.1)');
+      cast.addColorStop(1, 'rgba(62,38,24,0)');
+      ctx.fillStyle = cast;
+      ctx.beginPath();
+      ctx.arc(0, 0, drawWidth * .48, 0, TAU);
+      ctx.fill();
       ctx.restore();
-      ctx.fillStyle = 'rgba(84,57,40,.72)';
-      ctx.font = '32px "Microsoft YaHei", serif';
+
+      ctx.save();
+      ctx.translate(destinationX + drawWidth * .5, destinationY + drawHeight * .86);
+      ctx.scale(1, .115);
+      const contact = ctx.createRadialGradient(0, 0, drawWidth * .04, 0, 0, drawWidth * .34);
+      contact.addColorStop(0, 'rgba(42,24,15,.42)');
+      contact.addColorStop(.62, 'rgba(54,31,19,.16)');
+      contact.addColorStop(1, 'rgba(54,31,19,0)');
+      ctx.fillStyle = contact;
+      ctx.beginPath();
+      ctx.arc(0, 0, drawWidth * .34, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.drawImage(artCanvas, cropX, cropY, cropWidth, cropHeight, destinationX, destinationY, drawWidth, drawHeight);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(84,57,40,.82)';
+      ctx.font = '600 58px "Microsoft YaHei", serif';
       ctx.textAlign = 'center';
-      ctx.fillText('泥火之间 · 双手手作', 600, 1080);
-      ctx.font = '16px "Microsoft YaHei", sans-serif';
-      ctx.fillStyle = 'rgba(84,57,40,.48)';
-      ctx.fillText('360° CERAMIC STUDIO · ' + new Date().toLocaleDateString('zh-CN'), 600, 1120);
+      ctx.fillText('泥火之间 · 双手手作', 1200, 2110);
+      ctx.font = '28px "Microsoft YaHei", sans-serif';
+      ctx.fillStyle = 'rgba(84,57,40,.52)';
+      ctx.fillText('360° CERAMIC STUDIO · ' + angleLabel + '视角 · ' + new Date().toLocaleDateString('zh-CN'), 1200, 2172);
       return output.toDataURL('image/png');
     }
   }

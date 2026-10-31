@@ -34,6 +34,90 @@
     ...MACARON_COLORS.map(([id, name, hex]) => ({ id, name, hex, group: '马卡龙' }))
   ];
 
+  const GLAZE_CATEGORIES = ['全部', '清润', '磨砂', '渐变', '挂釉', '开片', '结晶'];
+
+  const GLAZE_PRESETS = [
+    { id: 'moon-white', name: '月白', category: '清润', primary: '#ece9da', secondary: '#cbd7cf', finish: 'soft', gloss: .34, texture: 'smooth', pattern: 'solid', note: '温润月白' },
+    { id: 'celadon-clear', name: '青瓷', category: '清润', primary: '#93b49f', secondary: '#c7d7bd', finish: 'gloss', gloss: .56, texture: 'crackle', pattern: 'crackle', note: '清透青绿' },
+    { id: 'sky-clear', name: '天青', category: '清润', primary: '#aacbcc', secondary: '#e1ebe2', finish: 'satin', gloss: .44, texture: 'smooth', pattern: 'gradient', note: '雨后天空' },
+    { id: 'shadow-blue', name: '影青', category: '清润', primary: '#c6d9d6', secondary: '#f2eee2', finish: 'gloss', gloss: .62, texture: 'rings', pattern: 'gradient', note: '薄透积釉' },
+    { id: 'jade-spring', name: '碧玉春', category: '清润', primary: '#6d9480', secondary: '#b6cab1', finish: 'soft', gloss: .42, texture: 'smooth', pattern: 'marble', note: '深碧玉色' },
+    { id: 'oat-matte', name: '燕麦', category: '磨砂', primary: '#c9bda4', secondary: '#e2d8c3', finish: 'matte', gloss: .12, texture: 'coarse', pattern: 'solid', note: '柔和砂面' },
+    { id: 'tea-dust', name: '茶叶末', category: '磨砂', primary: '#79745d', secondary: '#a9a181', finish: 'matte', gloss: .16, texture: 'coarse', pattern: 'speckle', note: '细碎茶末' },
+    { id: 'sandstone', name: '砂岩', category: '磨砂', primary: '#b98d69', secondary: '#d8b48e', finish: 'matte', gloss: .1, texture: 'hammer', pattern: 'speckle', note: '粗粝暖砂' },
+    { id: 'iron-rust', name: '铁锈', category: '磨砂', primary: '#8c5541', secondary: '#c68a63', finish: 'satin', gloss: .22, texture: 'coarse', pattern: 'marble', note: '氧化铁斑' },
+    { id: 'sesame', name: '芝麻釉', category: '磨砂', primary: '#d9d0b9', secondary: '#5b574d', finish: 'matte', gloss: .14, texture: 'coarse', pattern: 'speckle', note: '黑白颗粒' },
+    { id: 'dusk-gradient', name: '晚霞', category: '渐变', primary: '#bf6f62', secondary: '#e8c19a', finish: 'soft', gloss: .4, texture: 'smooth', pattern: 'gradient', note: '暖粉落日' },
+    { id: 'sea-salt', name: '海盐', category: '渐变', primary: '#6b9db2', secondary: '#d8e6dc', finish: 'gloss', gloss: .6, texture: 'smooth', pattern: 'gradient', note: '蓝白海风' },
+    { id: 'plum-mist', name: '梅子雾', category: '渐变', primary: '#76566d', secondary: '#cbb8c9', finish: 'satin', gloss: .34, texture: 'smooth', pattern: 'gradient', note: '紫粉烟霞' },
+    { id: 'autumn-gold', name: '金秋', category: '渐变', primary: '#a66536', secondary: '#e5c078', finish: 'soft', gloss: .46, texture: 'rings', pattern: 'gradient', note: '金棕秋色' },
+    { id: 'mist-blue', name: '雾蓝', category: '渐变', primary: '#7f9db2', secondary: '#d5e0e5', finish: 'matte', gloss: .18, texture: 'smooth', pattern: 'gradient', note: '灰蓝雾面' },
+    { id: 'blue-drip', name: '蓝釉流金', category: '挂釉', primary: '#315e83', secondary: '#c6a161', finish: 'drip', gloss: .7, texture: 'smooth', pattern: 'drip', note: '蓝底金流' },
+    { id: 'cream-falls', name: '奶油瀑布', category: '挂釉', primary: '#e5d4b7', secondary: '#a97754', finish: 'drip', gloss: .52, texture: 'smooth', pattern: 'drip', note: '厚釉垂落' },
+    { id: 'ink-silver', name: '墨釉银斑', category: '挂釉', primary: '#343937', secondary: '#a9ada5', finish: 'metal', gloss: .78, texture: 'smooth', pattern: 'speckle', note: '黑釉银光' },
+    { id: 'moss-drip', name: '苔痕挂釉', category: '挂釉', primary: '#6e8769', secondary: '#d3d0a8', finish: 'drip', gloss: .48, texture: 'crackle', pattern: 'drip', note: '苔绿流痕' },
+    { id: 'ice-celadon', name: '青瓷冰裂', category: '开片', primary: '#a8c4b5', secondary: '#6c887b', finish: 'gloss', gloss: .66, texture: 'crackle', pattern: 'crackle', note: '细密冰裂' },
+    { id: 'porcelain-crackle', name: '米白开片', category: '开片', primary: '#e9dfca', secondary: '#a99c87', finish: 'satin', gloss: .36, texture: 'crackle', pattern: 'crackle', note: '暖白开片' },
+    { id: 'night-crackle', name: '黑冰', category: '开片', primary: '#373b39', secondary: '#8d928d', finish: 'gloss', gloss: .72, texture: 'crackle', pattern: 'crackle', note: '深色冰纹' },
+    { id: 'peach-crackle', name: '霞粉开片', category: '开片', primary: '#d79a91', secondary: '#f0d2c2', finish: 'soft', gloss: .42, texture: 'crackle', pattern: 'crackle', note: '粉色冰纹' },
+    { id: 'star-sea', name: '星海', category: '结晶', primary: '#385e78', secondary: '#d8f0de', finish: 'crystal', gloss: .78, texture: 'smooth', pattern: 'crystal', note: '蓝底银晶' },
+    { id: 'frost-flower', name: '霜花', category: '结晶', primary: '#c7d6d8', secondary: '#f8f2df', finish: 'crystal', gloss: .7, texture: 'smooth', pattern: 'crystal', note: '霜白结晶' },
+    { id: 'gold-sand', name: '金砂', category: '结晶', primary: '#9f7747', secondary: '#efd59d', finish: 'metal', gloss: .84, texture: 'coarse', pattern: 'speckle', note: '金色微粒' },
+    { id: 'blue-crystal', name: '蓝晶', category: '结晶', primary: '#48758d', secondary: '#bfe2e4', finish: 'crystal', gloss: .74, texture: 'smooth', pattern: 'crystal', note: '清蓝析晶' },
+    { id: 'amber-crystal', name: '琥珀晶', category: '结晶', primary: '#8f5b32', secondary: '#e8b76d', finish: 'crystal', gloss: .8, texture: 'smooth', pattern: 'crystal', note: '暖琥珀晶' }
+  ];
+
+  const CUSTOMER_ORDERS = [
+    {
+      id: 'bookshop-window',
+      customer: '阿沅',
+      role: '独立书店店主',
+      day: '第 1 天',
+      title: '窗边的一只蓝白花器',
+      brief: '想要一件清爽的蓝白色花器，器腹圆一点，开窗时有自然光落在釉面上。',
+      minHeight: .74,
+      glazeCategories: ['清润', '渐变', '开片', '结晶'],
+      finishIds: ['soft', 'satin', 'gloss'],
+      reward: 20
+    },
+    {
+      id: 'teahouse-cup',
+      customer: '沈叔',
+      role: '老街茶屋主人',
+      day: '第 2 天',
+      title: '一只温润的青瓷杯',
+      brief: '杯子不用太花，青绿或米白色都好。釉面要柔和，入口处看起来干净轻盈。',
+      minHeight: .78,
+      glazeCategories: ['清润', '磨砂', '开片'],
+      finishIds: ['soft', 'satin', 'matte'],
+      reward: 25
+    },
+    {
+      id: 'florist-autumn',
+      customer: '小满',
+      role: '街角花店店主',
+      day: '第 3 天',
+      title: '秋日桌上的小花器',
+      brief: '想要像落叶一样温暖的花器，有一点流釉或结晶，放在花束旁边会很可爱。',
+      minHeight: .7,
+      glazeCategories: ['渐变', '挂釉', '结晶'],
+      finishIds: ['soft', 'gloss', 'drip', 'crystal'],
+      reward: 30
+    },
+    {
+      id: 'bakery-jar',
+      customer: '米娅',
+      role: '面包房甜点师',
+      day: '第 4 天',
+      title: '一只奶白色小罐',
+      brief: '想装小饼干和干花。器型低一点也没关系，釉面安静、有细腻手感就好。',
+      minHeight: .66,
+      glazeCategories: ['清润', '磨砂'],
+      finishIds: ['matte', 'satin', 'soft'],
+      reward: 35
+    }
+  ];
+
   const FINISHES = [
     { id: 'matte', name: '无光', specular: 0.03, shine: 0.05, note: '粗陶、干涩' },
     { id: 'satin', name: '哑光', specular: 0.12, shine: 0.16, note: '柔和、低反光' },
@@ -143,5 +227,5 @@
     return points;
   }
 
-  window.StudioData = { CLAYS, COLORS, FINISHES, TEXTURES, PROFILE_SAMPLES, STAMP_CATEGORIES, STAMPS, expandProfile };
+  window.StudioData = { CLAYS, COLORS, GLAZE_CATEGORIES, GLAZE_PRESETS, CUSTOMER_ORDERS, FINISHES, TEXTURES, PROFILE_SAMPLES, STAMP_CATEGORIES, STAMPS, expandProfile };
 })();

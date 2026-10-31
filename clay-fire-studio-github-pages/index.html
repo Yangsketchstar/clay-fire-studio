@@ -4,23 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#e8d7be" />
-  <title>泥火之间 2.0 · 360° 双手陶艺工坊</title>
-  <link rel="stylesheet" href="./studio.css" />
+  <meta name="description" content="《泥火之间》是一款从空泥团开始，自由塑形、彩绘并烧制的 360° 网页陶艺创作游戏。" />
+  <title>泥火之间 2.5 · 客户订单陶屋</title>
+  <link rel="stylesheet" href="./assets/css/studio.css" />
 </head>
-<body>
+<body class="immersive-ui">
   <div class="grain" aria-hidden="true"></div>
   <main class="app-shell">
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark">泥</div>
         <div>
-          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.0</p>
-          <h1>泥火之间 <span>360°</span></h1>
+          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.5 ORDER STUDIO</p>
+          <h1>泥火之间 <span>沉浸工坊</span></h1>
         </div>
       </div>
       <div class="top-actions">
         <div class="live-pill" id="topHandStatus"><i></i><span>摄像头未开启</span></div>
         <button class="ghost-btn" id="presentationBtn" type="button" title="课堂投屏">投屏</button>
+        <button class="ghost-btn" id="backPhaseBtn" type="button" title="返回上一步">← 上一步</button>
         <button class="ghost-btn" id="resetBtn" type="button" title="重新开始">↻ 重新开始</button>
         <button class="save-btn" id="exportBtn" type="button" disabled>↓ 保存成品</button>
       </div>
@@ -37,36 +39,7 @@
 
     <section class="workspace">
       <aside class="left-column">
-        <section class="camera-card">
-          <div class="card-head">
-            <div>
-              <p class="eyebrow">DUAL-HAND INPUT</p>
-              <h2>双手协同</h2>
-            </div>
-            <span class="camera-badge" id="cameraBadge">关闭</span>
-          </div>
-          <div class="camera-view" id="cameraView">
-            <video id="cameraVideo" playsinline muted></video>
-            <canvas id="handOverlay"></canvas>
-            <span class="mirror-badge">镜像操作</span>
-            <div class="camera-placeholder" id="cameraPlaceholder">
-              <span>双手</span>
-              <strong>同时握住泥团</strong>
-              <p>开启摄像头后，两只手会同时改变坯体。只出现一只手时不会切换模式。</p>
-            </div>
-            <div class="camera-reticle" aria-hidden="true"></div>
-          </div>
-          <p class="hand-message" id="handMessage">把双手一起放进画面，掌心朝向镜头。</p>
-          <div class="camera-device-row">
-            <select id="cameraSelect" aria-label="选择摄像头"><option value="">默认摄像头</option></select>
-            <button class="mini-btn" id="refreshCameraBtn" type="button">刷新</button>
-          </div>
-          <div class="camera-actions">
-            <button class="soft-btn" id="cameraBtn" type="button">开启摄像头</button>
-            <button class="soft-btn" id="demoHandsBtn" type="button">双手演示</button>
-          </div>
-        </section>
-
+        <button class="drawer-close" id="leftDrawerCloseBtn" type="button" aria-label="收起泥料与灵感">×</button>
         <section class="mini-card">
           <div class="card-head compact">
             <div>
@@ -111,25 +84,110 @@
         </div>
 
         <div class="clay-stage-shell" id="clayStageShell">
+          <div class="studio-backdrop" aria-hidden="true">
+            <div class="depth-window">
+              <span class="depth-sky"></span>
+              <span class="depth-mountain depth-mountain-a"></span>
+              <span class="depth-mountain depth-mountain-b"></span>
+              <i class="depth-tree depth-tree-a"></i>
+              <i class="depth-tree depth-tree-b"></i>
+              <i class="depth-tree depth-tree-c"></i>
+            </div>
+            <div class="wall-tools"><i></i><i></i><i></i><i></i></div>
+            <div class="wall-shelf">
+              <i class="shelf-pot shelf-pot-a"></i>
+              <i class="shelf-pot shelf-pot-b"></i>
+              <i class="shelf-pot shelf-pot-c"></i>
+            </div>
+            <div class="hanging-plant">
+              <i></i><i></i><i></i><i></i>
+            </div>
+            <span class="studio-petal petal-a"></span>
+            <span class="studio-petal petal-b"></span>
+            <span class="studio-petal petal-c"></span>
+            <div class="table-cloth"></div>
+            <div class="clay-buddy">
+              <i class="buddy-ear left"></i><i class="buddy-ear right"></i>
+              <span class="buddy-face">•ᴗ•</span>
+            </div>
+          </div>
           <div class="studio-light" aria-hidden="true"></div>
-          <div class="turntable-orbit" aria-hidden="true"><i></i></div>
           <canvas id="potteryCanvas" aria-label="360度陶器预览"></canvas>
-          <div class="wheel-base" aria-hidden="true"></div>
+          <canvas id="clayHandOverlay" class="clay-hand-overlay" aria-hidden="true"></canvas>
+          <div class="contact-feedback" id="contactFeedback" aria-live="polite">
+            <div class="contact-ring" id="contactRing"></div>
+            <div class="hand-hint hand-hint-left" id="handHintLeft"><span>左手</span></div>
+            <div class="hand-hint hand-hint-right" id="handHintRight"><span>右手</span></div>
+            <div class="contact-label" id="contactLabel">
+              <strong>器肩 · 左侧</strong>
+              <small>已捕捉 · 轻压塑形</small>
+            </div>
+          </div>
           <div class="power-floating" id="powerFloating"><i></i><span>转盘关闭</span></div>
           <div class="angle-pill" id="anglePill">拖动旋转 · 0°</div>
         </div>
 
-        <div class="stage-message" id="stageMessage">打开转盘电源，然后按住泥团揉压，或开启双手摄像头。</div>
+        <section class="camera-card camera-overlay collapsed" aria-label="手部摄像头">
+          <div class="camera-compact-head">
+            <div>
+              <p class="eyebrow">DUAL-HAND INPUT</p>
+              <strong>手部识别</strong>
+            </div>
+            <div class="camera-head-actions">
+              <span class="camera-badge" id="cameraBadge">关闭</span>
+              <button class="camera-panel-toggle" id="cameraTogglePanelBtn" type="button" aria-expanded="false">展开</button>
+            </div>
+          </div>
+          <div class="camera-view" id="cameraView">
+            <video id="cameraVideo" playsinline muted></video>
+            <canvas id="handOverlay"></canvas>
+            <span class="mirror-badge">镜像操作</span>
+            <div class="camera-placeholder" id="cameraPlaceholder">
+              <span>捏</span>
+              <strong>拇指与食指捏合</strong>
+              <p>张开手掌移动定位，捏合开始塑形，松开立即停止。</p>
+            </div>
+          </div>
+          <div class="camera-body" id="cameraBody" hidden>
+            <p class="hand-message" id="handMessage">张开手掌定位，拇指与食指捏合后开始塑形。</p>
+            <div class="camera-device-row">
+              <select id="cameraSelect" aria-label="选择摄像头"><option value="">默认摄像头</option></select>
+              <button class="mini-btn" id="refreshCameraBtn" type="button">刷新</button>
+            </div>
+            <div class="camera-actions">
+              <button class="soft-btn" id="cameraBtn" type="button">开启摄像头</button>
+              <button class="soft-btn" id="demoHandsBtn" type="button">双手演示</button>
+            </div>
+            <div class="camera-tuning-row">
+              <button class="mini-btn" id="calibrateHandsBtn" type="button" disabled>校准捏合</button>
+              <button class="mini-btn" id="handDiagnosticsBtn" type="button" aria-expanded="false">识别诊断</button>
+              <span id="calibrationStatus">捏合阈值：默认</span>
+            </div>
+            <div class="hand-diagnostics" id="handDiagnostics" hidden>
+              <span>帧率 <b data-diag-fps>--</b></span>
+              <span>手部 <b data-diag-hands>0</b></span>
+              <span>捏合 <b data-diag-pinch>松开</b></span>
+              <span>延迟 <b data-diag-latency>--</b></span>
+            </div>
+          </div>
+        </section>
+
+        <div class="stage-message" id="stageMessage">打开转盘电源，然后按住泥团揉压，或开启手部摄像头。</div>
         <div class="stage-actions">
           <button class="soft-btn small" id="undoBtn" type="button" disabled>↶ 撤销</button>
+          <button class="soft-btn small" id="redoBtn" type="button" disabled>↷ 重做</button>
           <button class="soft-btn small" id="smoothBtn" type="button" hidden>✦ 一键修饰边缘</button>
-          <button class="soft-btn small" id="centerViewBtn" type="button">正视视角</button>
-          <button class="soft-btn small" id="topViewBtn" type="button">俯视检查</button>
+          <div class="view-switch" aria-label="观察视角">
+            <button class="soft-btn small" id="centerViewBtn" type="button">正视</button>
+            <button class="soft-btn small active" id="quarterViewBtn" type="button">3/4</button>
+            <button class="soft-btn small" id="topViewBtn" type="button">俯视</button>
+          </div>
           <span class="triple-note">左右环绕 · 上下俯仰</span>
         </div>
       </section>
 
       <aside class="control-panel">
+        <button class="drawer-close" id="panelCloseBtn" type="button" aria-label="收起制作面板">×</button>
         <div class="panel-heading">
           <div>
             <p class="eyebrow" id="panelEyebrow">STEP 01 / 06</p>
@@ -139,6 +197,29 @@
         </div>
         <div class="panel-content" id="panelContent"></div>
       </aside>
+    </section>
+
+    <nav class="workshop-dock" aria-label="工坊快捷工具">
+      <button class="dock-action" id="materialsToggleBtn" type="button" aria-expanded="false">
+        <i>泥</i><span>泥料与灵感</span>
+      </button>
+      <button class="dock-action" id="quickWheelBtn" type="button" aria-pressed="false">
+        <i>转</i><span id="quickWheelText">启动转盘</span>
+      </button>
+      <button class="dock-action dock-primary" id="panelToggleBtn" type="button" aria-expanded="false">
+        <i>作</i><span id="dockPanelText">制作面板</span>
+      </button>
+    </nav>
+
+    <section class="order-brief" id="orderBrief" aria-live="polite">
+      <div class="order-portrait" aria-hidden="true"><span id="orderInitial">沅</span></div>
+      <div class="order-copy">
+        <p class="eyebrow" id="orderKicker">阿沅的委托 · 第 1 天</p>
+        <strong id="orderTitle">窗边的一只蓝白花器</strong>
+        <p id="orderCopy">想要一件清爽的蓝白色花器，器腹圆一点，开窗时有自然光落在釉面上。</p>
+      </div>
+      <span class="order-reward" id="orderReward">灵感 +20</span>
+      <div class="order-checks" id="orderChecks"></div>
     </section>
 
     <footer class="footer">
@@ -167,17 +248,25 @@
         <p class="result-copy" id="resultCopy">一件真正可以从正面、侧面和背面欣赏的手作陶器。</p>
         <div class="result-art" id="resultArt"></div>
         <div class="result-specs" id="resultSpecs"></div>
+        <div class="result-order" id="resultOrder"></div>
+        <div class="result-angle-picker" id="resultAnglePicker" aria-label="选择保存角度">
+          <span>保存视角</span>
+          <button data-export-angle="front" type="button">正面</button>
+          <button data-export-angle="side" type="button">侧面</button>
+          <button data-export-angle="top" type="button">俯视</button>
+        </div>
         <div class="result-actions">
           <button class="soft-btn" id="restartBtn" type="button">再做一个</button>
-          <button class="save-btn" id="saveResultBtn" type="button">保存 PNG</button>
+          <button class="soft-btn" id="nextOrderBtn" type="button">接下一单</button>
+          <button class="save-btn" id="saveResultBtn" type="button">保存所选角度</button>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="./studio-data.js"></script>
-  <script src="./studio-3d.js"></script>
-  <script src="./studio-hand.js"></script>
-  <script src="./studio-app.js"></script>
+<script src="./assets/js/studio-data.js"></script>
+<script src="./assets/js/studio-3d.js"></script>
+<script src="./assets/js/studio-hand.js"></script>
+<script src="./assets/js/studio-app.js"></script>
 </body>
 </html>
