@@ -67,57 +67,6 @@
     { id: 'amber-crystal', name: '琥珀晶', category: '结晶', primary: '#8f5b32', secondary: '#e8b76d', finish: 'crystal', gloss: .8, texture: 'smooth', pattern: 'crystal', note: '暖琥珀晶' }
   ];
 
-  const CUSTOMER_ORDERS = [
-    {
-      id: 'bookshop-window',
-      customer: '阿沅',
-      role: '独立书店店主',
-      day: '第 1 天',
-      title: '窗边的一只蓝白花器',
-      brief: '想要一件清爽的蓝白色花器，器腹圆一点，开窗时有自然光落在釉面上。',
-      minHeight: .74,
-      glazeCategories: ['清润', '渐变', '开片', '结晶'],
-      finishIds: ['soft', 'satin', 'gloss'],
-      reward: 20
-    },
-    {
-      id: 'teahouse-cup',
-      customer: '沈叔',
-      role: '老街茶屋主人',
-      day: '第 2 天',
-      title: '一只温润的青瓷杯',
-      brief: '杯子不用太花，青绿或米白色都好。釉面要柔和，入口处看起来干净轻盈。',
-      minHeight: .78,
-      glazeCategories: ['清润', '磨砂', '开片'],
-      finishIds: ['soft', 'satin', 'matte'],
-      reward: 25
-    },
-    {
-      id: 'florist-autumn',
-      customer: '小满',
-      role: '街角花店店主',
-      day: '第 3 天',
-      title: '秋日桌上的小花器',
-      brief: '想要像落叶一样温暖的花器，有一点流釉或结晶，放在花束旁边会很可爱。',
-      minHeight: .7,
-      glazeCategories: ['渐变', '挂釉', '结晶'],
-      finishIds: ['soft', 'gloss', 'drip', 'crystal'],
-      reward: 30
-    },
-    {
-      id: 'bakery-jar',
-      customer: '米娅',
-      role: '面包房甜点师',
-      day: '第 4 天',
-      title: '一只奶白色小罐',
-      brief: '想装小饼干和干花。器型低一点也没关系，釉面安静、有细腻手感就好。',
-      minHeight: .66,
-      glazeCategories: ['清润', '磨砂'],
-      finishIds: ['matte', 'satin', 'soft'],
-      reward: 35
-    }
-  ];
-
   const FINISHES = [
     { id: 'matte', name: '无光', specular: 0.03, shine: 0.05, note: '粗陶、干涩' },
     { id: 'satin', name: '哑光', specular: 0.12, shine: 0.16, note: '柔和、低反光' },
@@ -227,5 +176,5 @@
     return points;
   }
 
-  window.StudioData = { CLAYS, COLORS, GLAZE_CATEGORIES, GLAZE_PRESETS, CUSTOMER_ORDERS, FINISHES, TEXTURES, PROFILE_SAMPLES, STAMP_CATEGORIES, STAMPS, expandProfile };
+  window.StudioData = { CLAYS, COLORS, GLAZE_CATEGORIES, GLAZE_PRESETS, FINISHES, TEXTURES, PROFILE_SAMPLES, STAMP_CATEGORIES, STAMPS, expandProfile };
 })();

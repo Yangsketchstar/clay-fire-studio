@@ -34,6 +34,7 @@ body {
 }
 body.modal-open { overflow: hidden; }
 button, input, select { font: inherit; }
+button, select, input { touch-action: manipulation; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible { outline: 3px solid rgba(69,110,142,.38); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .4; }
@@ -734,19 +735,6 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
 .result-art canvas { width: 100%; height: 100%; }
 .result-specs { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
 .result-specs span { padding: 5px 8px; border: 1px solid rgba(255,236,205,.12); border-radius: 999px; background: rgba(255,245,226,.04); color: rgba(255,242,220,.7); font-size: 7px; }
-.result-order {
-  display: grid;
-  gap: 5px;
-  width: min(430px,100%);
-  margin-top: 10px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255,236,205,.13);
-  border-radius: 13px;
-  background: rgba(255,245,226,.05);
-  text-align: center;
-}
-.result-order strong { color: #ffe8bd; font-family: var(--serif); font-size: 15px; letter-spacing: .08em; }
-.result-order span { color: rgba(255,241,217,.62); font-size: 8px; line-height: 1.55; }
 .result-angle-picker {
   display: flex;
   align-items: center;
@@ -883,7 +871,6 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   pointer-events: none;
 }
 .workshop-dock,
-.order-brief { display: none; }
 
 @media (min-width: 981px) {
   body.immersive-ui {
@@ -1281,7 +1268,6 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     transition: transform .24s cubic-bezier(.2,.8,.2,1);
   }
   .panel-open .control-panel { transform: translateX(0); }
-  .panel-open .order-brief { opacity: 0; pointer-events: none; transform: translateY(8px); }
 
   .immersive-ui .workshop-dock {
     position: absolute;
@@ -1343,103 +1329,6 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     background: rgba(255,250,241,.13);
   }
 
-  .immersive-ui .order-brief {
-    position: absolute;
-    right: 20px;
-    bottom: 88px;
-    z-index: 74;
-    display: grid;
-    width: min(340px,calc(100vw - 44px));
-    grid-template-columns: 48px minmax(0,1fr) auto;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 12px;
-    border: 1px solid rgba(255,250,239,.25);
-    border-radius: 18px;
-    background: rgba(250,242,229,.9);
-    box-shadow: 0 18px 42px rgba(42,26,17,.2);
-    backdrop-filter: blur(18px);
-    transition: opacity .18s ease,transform .18s ease;
-  }
-  .immersive-ui .order-portrait {
-    position: relative;
-    display: grid;
-    width: 48px;
-    height: 48px;
-    place-items: center;
-    overflow: hidden;
-    border: 2px solid rgba(255,250,241,.72);
-    border-radius: 50%;
-    background:
-      radial-gradient(circle at 50% 32%,#f3d7bd 0 20%,transparent 21%),
-      linear-gradient(145deg,#8da587,#5f7b65);
-    color: rgba(255,250,240,.9);
-    font-family: var(--serif);
-    font-size: 12px;
-    box-shadow: 0 4px 12px rgba(61,39,26,.13);
-  }
-  .immersive-ui .order-portrait::after {
-    content: "";
-    position: absolute;
-    right: 8px;
-    bottom: -12px;
-    left: 8px;
-    height: 27px;
-    border-radius: 50% 50% 0 0;
-    background: #6e856d;
-  }
-  .immersive-ui .order-portrait span { position: relative; z-index: 1; margin-top: 22px; }
-  .immersive-ui .order-copy { min-width: 0; }
-  .immersive-ui .order-copy > strong {
-    display: block;
-    margin-top: 2px;
-    overflow: hidden;
-    font-family: var(--serif);
-    font-size: 13px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .immersive-ui .order-copy > p:last-child {
-    margin: 3px 0 0;
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 8px;
-    line-height: 1.5;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .immersive-ui .order-reward {
-    align-self: start;
-    padding: 4px 7px;
-    border-radius: 999px;
-    background: rgba(154,109,69,.11);
-    color: #976245;
-    font-size: 7px;
-    white-space: nowrap;
-  }
-  .immersive-ui .order-checks {
-    display: flex;
-    grid-column: 2/4;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 1px;
-  }
-  .immersive-ui .order-checks span {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 3px 6px;
-    border: 1px solid rgba(91,64,47,.1);
-    border-radius: 999px;
-    background: rgba(255,251,244,.46);
-    color: #9a8270;
-    font-size: 6px;
-  }
-  .immersive-ui .order-checks span.done {
-    border-color: rgba(89,126,82,.24);
-    background: rgba(225,239,219,.72);
-    color: #61785d;
-  }
   .immersive-ui .footer { display: none; }
 }
 
@@ -1449,7 +1338,6 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   .immersive-ui .left-column { left: 76px; width: 210px; }
   .immersive-ui .camera-card.camera-overlay { width: 190px; }
   .immersive-ui .camera-card.camera-overlay:not(.collapsed) { left: 76px; width: min(280px,calc(100vw - 160px)); }
-  .immersive-ui .order-brief { width: 306px; }
   .immersive-ui .dock-action { min-width: 94px; padding-right: 10px; }
 }
 
@@ -1772,20 +1660,10 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     background: rgba(118,139,112,.24);
     color: rgba(239,249,232,.9);
   }
-  .immersive-ui .control-panel,
-  .immersive-ui .order-brief {
+  .immersive-ui .control-panel {
     border-color: rgba(255,250,240,.32);
     background: rgba(247,239,226,.96);
     box-shadow: 0 24px 58px rgba(43,29,21,.25);
-  }
-  .immersive-ui .order-brief {
-    background:
-      linear-gradient(135deg,rgba(255,251,244,.95),rgba(232,225,207,.94));
-  }
-  .immersive-ui .order-portrait {
-    background:
-      radial-gradient(circle at 50% 32%,#ecd6bd 0 20%,transparent 21%),
-      linear-gradient(145deg,#91a48a,#5b7260);
   }
   .immersive-ui .camera-card.camera-overlay {
     border-color: rgba(240,249,239,.2);
@@ -1812,6 +1690,7 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     width: 100%;
     height: 100%;
     overflow: hidden;
+    overscroll-behavior: none;
     background: #b9ac99;
   }
   .immersive-ui .app-shell {
@@ -1867,7 +1746,7 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     left: 7px;
     z-index: 76;
     display: flex;
-    width: 46px;
+    width: 52px;
     min-height: 0;
     flex-direction: column;
     gap: 4px;
@@ -1880,8 +1759,8 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   }
   .immersive-ui .phase {
     display: grid;
-    width: 34px;
-    height: 38px;
+    width: 40px;
+    height: 41px;
     grid-template-columns: 1fr;
     grid-template-rows: 22px 1fr;
     place-items: center;
@@ -1908,8 +1787,8 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   }
   .immersive-ui .stage-heading {
     top: 50px;
-    left: 60px;
-    width: min(330px,calc(100vw - 360px));
+    left: 66px;
+    width: min(324px,calc(100vw - 360px));
     min-height: 34px;
     padding: 4px 5px 4px 10px;
     transform: none;
@@ -1923,7 +1802,7 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     top: 50px;
     right: 32px;
     bottom: 42px;
-    left: 53px;
+    left: 59px;
   }
   .immersive-ui .clay-stage-shell::before {
     right: -53px;
@@ -1935,8 +1814,8 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   .immersive-ui .stage-actions {
     top: 87px;
     bottom: auto;
-    left: 60px;
-    width: 330px;
+    left: 66px;
+    width: 324px;
     min-height: 30px;
     gap: 4px;
     padding: 4px 6px;
@@ -1977,7 +1856,7 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     position: absolute;
     top: 52px;
     bottom: 58px;
-    left: 58px;
+    left: 64px;
     z-index: 88;
     display: flex;
     width: 230px;
@@ -2020,33 +1899,20 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   }
   .immersive-ui .dock-action {
     min-width: 0;
-    height: 31px;
+    height: 38px;
     gap: 5px;
     padding: 0 8px 0 5px;
     border-radius: 9px;
-    font-size: 7px;
+    font-size: 8px;
   }
-  .immersive-ui .dock-action i { width: 20px; height: 20px; flex-basis: 20px; font-size: 8px; }
+  .immersive-ui .dock-action i { width: 24px; height: 24px; flex-basis: 24px; font-size: 9px; }
 
-  .immersive-ui .order-brief {
-    position: absolute;
-    right: 7px;
-    bottom: 46px;
-    z-index: 72;
-    display: grid;
-    width: 220px;
-    min-height: 0;
-    grid-template-columns: 30px minmax(0,1fr);
-    gap: 6px;
-    padding: 6px 7px;
-    border-radius: 12px;
-  }
-  .immersive-ui .order-portrait { width: 30px; height: 30px; }
-  .immersive-ui .order-portrait span { margin-top: 13px; font-size: 7px; }
-  .immersive-ui .order-copy > strong { font-size: 9px; }
-  .immersive-ui .order-copy > p:last-child,
-  .immersive-ui .order-reward,
-  .immersive-ui .order-checks { display: none; }
   .immersive-ui .footer { display: none; }
   .immersive-ui .clay-buddy { display: none; }
+  .immersive-ui .stage-actions .soft-btn,
+  .immersive-ui .view-modes button,
+  .immersive-ui .camera-panel-toggle { min-height: 30px; }
+  .immersive-ui .control-panel button,
+  .immersive-ui .control-panel select,
+  .immersive-ui .left-column button { min-height: 34px; }
 }

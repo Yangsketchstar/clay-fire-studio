@@ -79,9 +79,10 @@
 
     resize() {
       const rect = this.canvas.getBoundingClientRect();
-      this.dpr = Math.min(2, window.devicePixelRatio || 1);
-      this.width = Math.max(320, rect.width);
-      this.height = Math.max(420, rect.height);
+      const compact = rect.width * rect.height < 560000 || window.matchMedia('(max-height: 560px)').matches;
+      this.dpr = Math.min(compact ? 1.35 : 2, window.devicePixelRatio || 1);
+      this.width = Math.max(1, rect.width || 320);
+      this.height = Math.max(1, rect.height || 420);
       this.canvas.width = Math.round(this.width * this.dpr);
       this.canvas.height = Math.round(this.height * this.dpr);
       this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -351,8 +352,9 @@
       const context = this.ctx;
       const width = this.width, height = this.height;
       const geometry = this.geometry();
-      const segments = 168;
-      const rings = Math.max(160, state.profile.length);
+      const compact = width * height < 560000;
+      const segments = compact ? 112 : 168;
+      const rings = Math.max(compact ? 112 : 160, state.profile.length);
       context.clearRect(0, 0, width, height);
 
       if (!this.suppressShadow) {
@@ -1071,7 +1073,7 @@
         }
       }
 
-      const hitRadius = Math.max(16, geometry.radiusScale * .06);
+      const hitRadius = Math.max(24, geometry.radiusScale * .08);
       const hit = !!best && bestDistance <= hitRadius * hitRadius;
       if (!hit) {
         return { hit: false, x, y };

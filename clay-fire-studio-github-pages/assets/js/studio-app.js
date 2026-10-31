@@ -82,12 +82,6 @@
     dockPanelText: $('dockPanelText'),
     leftDrawerCloseBtn: $('leftDrawerCloseBtn'),
     panelCloseBtn: $('panelCloseBtn'),
-    orderInitial: $('orderInitial'),
-    orderKicker: $('orderKicker'),
-    orderTitle: $('orderTitle'),
-    orderCopy: $('orderCopy'),
-    orderReward: $('orderReward'),
-    orderChecks: $('orderChecks'),
     presentationBtn: $('presentationBtn'),
     backPhaseBtn: $('backPhaseBtn'),
     resetBtn: $('resetBtn'),
@@ -107,10 +101,8 @@
     resultCopy: $('resultCopy'),
     resultArt: $('resultArt'),
     resultSpecs: $('resultSpecs'),
-    resultOrder: $('resultOrder'),
     resultAnglePicker: $('resultAnglePicker'),
     restartBtn: $('restartBtn'),
-    nextOrderBtn: $('nextOrderBtn'),
     saveResultBtn: $('saveResultBtn')
   };
 
@@ -138,7 +130,6 @@
       pinchForce: 1,
       cameraOn: false,
       demoOn: false,
-      currentOrderId: (D.CUSTOMER_ORDERS && D.CUSTOMER_ORDERS[0] ? D.CUSTOMER_ORDERS[0].id : 'bookshop-window'),
       clayId: 'white',
       knead: 0,
       rawProfile: makeRawProfile(),
@@ -512,7 +503,6 @@
     if (height) height.textContent = (Math.round(state.heightFactor * 100) / 100).toFixed(2) + '×';
     const goDry = els.panelContent.querySelector('[data-action="go-dry"]');
     if (goDry) goDry.disabled = false;
-    updateOrderCard();
   }
 
   function toast(message) {
@@ -628,38 +618,6 @@
     return map[state.phase];
   }
 
-  function currentOrder() {
-    return D.CUSTOMER_ORDERS.find(order => order.id === state.currentOrderId) || D.CUSTOMER_ORDERS[0];
-  }
-
-  function orderCheckStatus() {
-    const order = currentOrder();
-    const bodyGlaze = state.glaze && state.glaze.body;
-    const preset = bodyGlaze && D.GLAZE_PRESETS.find(item => item.id === bodyGlaze.presetId);
-    const shapeDone = state.heightFactor >= order.minHeight;
-    const glazeDone = !!bodyGlaze && (!preset || order.glazeCategories.includes(preset.category));
-    const finishDone = order.finishIds.includes(state.finishId);
-    return [
-      { key: 'shape', label: '器型高度', done: shapeDone, detail: Math.round(clamp((state.heightFactor - .62) / .4, 0, 1) * 100) + '%' },
-      { key: 'glaze', label: '釉色方向', done: glazeDone, detail: preset ? preset.category : (bodyGlaze ? '自定义' : '未施釉') },
-      { key: 'finish', label: '釉面质感', done: finishDone, detail: findFinish(state.finishId).name }
-    ];
-  }
-
-  function updateOrderCard() {
-    const order = currentOrder();
-    const checks = orderCheckStatus();
-    els.orderInitial.textContent = order.customer.slice(0, 1);
-    els.orderKicker.textContent = order.customer + '的委托 · ' + order.day;
-    els.orderTitle.textContent = order.title;
-    els.orderCopy.textContent = order.brief;
-    els.orderReward.textContent = '灵感 +' + order.reward;
-    els.orderChecks.innerHTML = checks.map(check => (
-      '<span class="' + (check.done ? 'done' : '') + '"><b>' + (check.done ? '✓' : '○') + '</b>' +
-      check.label + ' · ' + check.detail + '</span>'
-    )).join('');
-  }
-
   function renderAll() {
     const meta = phaseMeta();
     els.stageEyebrow.textContent = meta[0];
@@ -690,7 +648,6 @@
         : state.phase === 'fire'
           ? '温控与本烧'
           : '器型与下一步';
-    updateOrderCard();
     els.phases.forEach((button, index) => {
       const current = phaseOrder.indexOf(state.phase);
       button.classList.toggle('active', button.dataset.phase === state.phase);
@@ -1009,7 +966,6 @@
         stamp.draw(canvas.getContext('2d'), 74, state.stampColor);
       });
     }
-    updateOrderCard();
   }
 
   function setPhase(phase) {
@@ -1618,18 +1574,6 @@
       findTexture(state.texture).name,
       glazeNames
     ].map(text => '<span>' + text + '</span>').join('');
-    const order = currentOrder();
-    const completed = orderCheckStatus().filter(check => check.done).length;
-    const feedback = completed === 3
-      ? order.customer + '非常喜欢这件作品，订单要求全部达成。'
-      : completed === 2
-        ? order.customer + '觉得整体很合适，还有一项可以继续琢磨。'
-        : completed === 1
-          ? order.customer + '看到了你的想法，下一单可以再贴近要求一些。'
-          : '这次保留了自由创作，但还没有满足' + order.customer + '的委托要求。';
-    els.resultOrder.innerHTML =
-      '<strong>' + order.title + ' · ' + '★'.repeat(completed) + '☆'.repeat(3 - completed) + '</strong>' +
-      '<span>' + feedback + '</span>';
     setResultAngle(state.exportAngle || 'side');
   }
 
@@ -1707,17 +1651,12 @@
     firingActive = false;
   }
 
-  function resetGame(force, advanceOrder) {
+  function resetGame(force) {
     if (!force && !window.confirm('重新开始会清空当前泥料、坯体、釉色和贴花，确定继续吗？')) return;
-    const currentIndex = D.CUSTOMER_ORDERS.findIndex(order => order.id === state.currentOrderId);
-    const orderId = advanceOrder && D.CUSTOMER_ORDERS.length
-      ? D.CUSTOMER_ORDERS[(currentIndex + 1 + D.CUSTOMER_ORDERS.length) % D.CUSTOMER_ORDERS.length].id
-      : state.currentOrderId;
     stopAuxiliaryTimers();
     if (handTracker) handTracker.stop();
     handTracker = null;
     state = initialState();
-    state.currentOrderId = orderId;
     resultExportCache = { angle: null, dataUrl: '' };
     renderer.clearTexture();
     renderer.clearFreeCanvas();
@@ -1924,10 +1863,11 @@
       if (state.decorMode === 'paint' || state.decorMode === 'free') {
         painting = true;
         freePainting = state.decorMode === 'free';
+        const brushWidth = state.brushSize * (event.pointerType === 'touch' ? 1.3 : 1);
         if (freePainting) {
           pushHistory('自由画布笔触');
           renderer.endFreeStroke();
-          renderer.freePaintAt(point.x, point.y, selectedColor().hex, state.brushSize);
+          renderer.freePaintAt(point.x, point.y, selectedColor().hex, brushWidth);
           state.freeArtwork = true;
         } else {
           const uv = renderer.screenToUv(point.x, point.y);
@@ -1939,7 +1879,7 @@
           }
           pushHistory('器表彩绘笔触');
           renderer.lastPaint = null;
-          renderer.paintAt(point.x, point.y, selectedColor().hex, state.brushSize);
+          renderer.paintAt(point.x, point.y, selectedColor().hex, brushWidth);
           state.surfaceArtwork = true;
         }
         state.hasArtwork = true;
@@ -1956,6 +1896,8 @@
 
   function potteryPointerMove(event) {
     const point = canvasCoords(event);
+    const touchBoost = event.pointerType === 'touch' ? 1.65 : 1;
+    const brushWidth = state.brushSize * (event.pointerType === 'touch' ? 1.3 : 1);
     if (!sculptDrag && !painting) {
       if (state.phase === 'clay' || state.phase === 'sculpt' || state.phase === 'decorate') {
         updateContactFromUv(
@@ -1969,8 +1911,8 @@
     if (sculptDrag && sculptDrag.mode === 'rotate') {
       const dx = point.x - sculptDrag.lastX;
       const dy = point.y - (sculptDrag.lastY == null ? point.y : sculptDrag.lastY);
-      renderer.rotateBy(dx * .0085);
-      renderer.tiltBy(-dy * .006);
+      renderer.rotateBy(dx * .0085 * touchBoost);
+      renderer.tiltBy(-dy * .006 * touchBoost);
       sculptDrag.lastX = point.x;
       sculptDrag.lastY = point.y;
       return;
@@ -1984,14 +1926,14 @@
         if (uv.hit) sculptDrag.uv = uv;
         const activeUv = sculptDrag.uv;
         if (!activeUv) return;
-        if (uv.hit) deformLocal(uv.v, uv.angle, dx * .0022 * state.pinchForce);
+        if (uv.hit) deformLocal(uv.v, uv.angle, dx * .0022 * state.pinchForce * touchBoost);
         if (state.phase === 'clay') {
-          state.knead = clamp(state.knead + Math.abs(dx) * .16 + Math.abs(dy) * .1, 0, 100);
+          state.knead = clamp(state.knead + Math.abs(dx * touchBoost) * .16 + Math.abs(dy * touchBoost) * .1, 0, 100);
           updateKneadUi();
           updateContactFromUv(uv.hit ? uv : activeUv, '揉泥中 · 含水与受力实时变化', true);
         } else {
-          state.heightFactor = clamp(state.heightFactor - dy * .0012 * state.pinchForce, .62, 1.02);
-          state.shapeWork = clamp((state.shapeWork || 0) + Math.abs(dy) * .001, 0, 1);
+          state.heightFactor = clamp(state.heightFactor - dy * .0012 * state.pinchForce * touchBoost, .62, 1.02);
+          state.shapeWork = clamp((state.shapeWork || 0) + Math.abs(dy * touchBoost) * .001, 0, 1);
           state.throwProgress = throwPercent();
           state.edgeSmoothed = false;
           syncRenderer();
@@ -2004,14 +1946,14 @@
       return;
     }
     if (painting && state.decorMode === 'paint') {
-      const uv = renderer.paintAt(point.x, point.y, selectedColor().hex, state.brushSize);
+      const uv = renderer.paintAt(point.x, point.y, selectedColor().hex, brushWidth);
       if (!uv) {
         renderer.endStroke();
         painting = false;
         setContactVisible(false);
       }
     } else if (painting && state.decorMode === 'free') {
-      renderer.freePaintAt(point.x, point.y, selectedColor().hex, state.brushSize);
+      renderer.freePaintAt(point.x, point.y, selectedColor().hex, brushWidth);
     }
     if (sculptDrag && sculptDrag.mode === 'tap') {
       sculptDrag.moved += Math.abs(point.x - sculptDrag.lastX) + Math.abs(point.y - sculptDrag.lastY);
@@ -2137,7 +2079,6 @@
       setResultAngle(button.dataset.exportAngle);
     });
     els.restartBtn.addEventListener('click', () => resetGame(true));
-    els.nextOrderBtn.addEventListener('click', () => resetGame(true, true));
     els.closeModalBtn.addEventListener('click', closeModal);
     els.modal.addEventListener('click', event => { if (event.target === els.modal) closeModal(); });
     document.addEventListener('keydown', event => {

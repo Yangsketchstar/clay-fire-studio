@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#e8d7be" />
   <meta name="description" content="《泥火之间》是一款从空泥团开始，自由塑形、彩绘并烧制的 360° 网页陶艺创作游戏。" />
-  <title>泥火之间 2.5.1 · 客户订单陶屋</title>
+  <title>泥火之间 2.5.2 · 自由陶艺工坊</title>
   <link rel="stylesheet" href="./assets/css/studio.css" />
 </head>
 <body class="immersive-ui">
@@ -15,7 +15,7 @@
       <div class="brand">
         <div class="brand-mark">泥</div>
         <div>
-          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.5.1 ORDER STUDIO</p>
+          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.5.2 CREATIVE STUDIO</p>
           <h1>泥火之间 <span>沉浸工坊</span></h1>
         </div>
       </div>
@@ -211,17 +211,6 @@
       </button>
     </nav>
 
-    <section class="order-brief" id="orderBrief" aria-live="polite">
-      <div class="order-portrait" aria-hidden="true"><span id="orderInitial">沅</span></div>
-      <div class="order-copy">
-        <p class="eyebrow" id="orderKicker">阿沅的委托 · 第 1 天</p>
-        <strong id="orderTitle">窗边的一只蓝白花器</strong>
-        <p id="orderCopy">想要一件清爽的蓝白色花器，器腹圆一点，开窗时有自然光落在釉面上。</p>
-      </div>
-      <span class="order-reward" id="orderReward">灵感 +20</span>
-      <div class="order-checks" id="orderChecks"></div>
-    </section>
-
     <footer class="footer">
       <span>泥火之间 · 双手手作 · 360° 立体坯体</span>
       <span id="footerStatus">先打开转盘电源，再揉匀泥团</span>
@@ -248,7 +237,6 @@
         <p class="result-copy" id="resultCopy">一件真正可以从正面、侧面和背面欣赏的手作陶器。</p>
         <div class="result-art" id="resultArt"></div>
         <div class="result-specs" id="resultSpecs"></div>
-        <div class="result-order" id="resultOrder"></div>
         <div class="result-angle-picker" id="resultAnglePicker" aria-label="选择保存角度">
           <span>保存视角</span>
           <button data-export-angle="front" type="button">正面</button>
@@ -257,7 +245,6 @@
         </div>
         <div class="result-actions">
           <button class="soft-btn" id="restartBtn" type="button">再做一个</button>
-          <button class="soft-btn" id="nextOrderBtn" type="button">接下一单</button>
           <button class="save-btn" id="saveResultBtn" type="button">保存所选角度</button>
         </div>
       </div>
