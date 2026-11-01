@@ -871,6 +871,7 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   pointer-events: none;
 }
 .workshop-dock,
+.journey-prompt { display: none; }
 
 @media (min-width: 981px) {
   body.immersive-ui {
@@ -1072,10 +1073,7 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   .immersive-ui .shelf-pot-b { width: 28px; height: 41px; left: 66px; }
   .immersive-ui .shelf-pot-c { width: 32px; height: 44px; }
   .immersive-ui .table-cloth {
-    right: 20%;
-    left: 20%;
-    height: 29%;
-    opacity: .34;
+    display: none;
   }
   .immersive-ui .clay-buddy {
     right: 8%;
@@ -1327,6 +1325,82 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   .immersive-ui .dock-primary {
     border-color: rgba(255,244,220,.15);
     background: rgba(255,250,241,.13);
+  }
+
+  .immersive-ui .journey-prompt {
+    position: fixed;
+    right: 18px;
+    bottom: 84px;
+    z-index: 82;
+    display: grid;
+    width: min(330px,calc(100vw - 44px));
+    grid-template-columns: 40px minmax(0,1fr);
+    gap: 8px 10px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid rgba(255,250,240,.3);
+    border-radius: 17px;
+    background: rgba(250,242,229,.94);
+    box-shadow: 0 18px 42px rgba(42,26,17,.2);
+    backdrop-filter: blur(18px);
+    transition: opacity .18s ease,transform .18s ease;
+  }
+  .immersive-ui .journey-mascot {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border: 2px solid rgba(255,250,241,.8);
+    border-radius: 13px 13px 16px 16px;
+    background: linear-gradient(145deg,#dca988,#a76648);
+    color: #fff9ed;
+    font-family: var(--serif);
+    font-size: 15px;
+    box-shadow: inset 0 4px 7px rgba(255,255,255,.2);
+  }
+  .immersive-ui .journey-copy { min-width: 0; }
+  .immersive-ui .journey-copy strong {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    font-family: var(--serif);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .immersive-ui .journey-copy > span {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 7px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .immersive-ui .journey-action {
+    grid-column: 2;
+    min-height: 32px;
+    padding: 0 12px;
+    border: 1px solid #7b4932;
+    border-radius: 9px;
+    background: linear-gradient(135deg,#a75f41,#88472f);
+    color: #fff8ed;
+    cursor: pointer;
+    font-size: 8px;
+    font-weight: 700;
+    box-shadow: 0 5px 13px rgba(110,61,38,.16);
+  }
+  .immersive-ui .journey-action:disabled {
+    border-color: rgba(102,78,61,.14);
+    background: rgba(226,214,197,.82);
+    color: #988574;
+    box-shadow: none;
+  }
+  .panel-open .journey-prompt {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
   }
 
   .immersive-ui .footer { display: none; }
@@ -1906,6 +1980,24 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
     font-size: 8px;
   }
   .immersive-ui .dock-action i { width: 24px; height: 24px; flex-basis: 24px; font-size: 9px; }
+  .immersive-ui .journey-prompt {
+    right: 7px;
+    bottom: 55px;
+    width: 250px;
+    grid-template-columns: 30px minmax(0,1fr);
+    gap: 5px 6px;
+    padding: 6px 7px;
+    border-radius: 12px;
+  }
+  .immersive-ui .journey-mascot {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px 9px 11px 11px;
+    font-size: 10px;
+  }
+  .immersive-ui .journey-copy strong { font-size: 9px; }
+  .immersive-ui .journey-copy > span { display: none; }
+  .immersive-ui .journey-action { min-height: 29px; font-size: 7px; }
 
   .immersive-ui .footer { display: none; }
   .immersive-ui .clay-buddy { display: none; }
@@ -1915,4 +2007,249 @@ input[type="range"]::-webkit-slider-thumb { width: 13px; height: 13px; margin-to
   .immersive-ui .control-panel button,
   .immersive-ui .control-panel select,
   .immersive-ui .left-column button { min-height: 34px; }
+}
+
+/* 2.5.3 — warm, playful studio surface and clearer game prompts */
+body {
+  background:
+    radial-gradient(circle at 8% 0,rgba(255,253,247,.98),transparent 31%),
+    radial-gradient(circle at 86% 16%,rgba(255,205,193,.34),transparent 27%),
+    radial-gradient(circle at 92% 92%,rgba(177,205,180,.25),transparent 29%),
+    linear-gradient(135deg,#fff1df,#f3ddd6 58%,#ead5bd);
+}
+.immersive-ui .studio-stage {
+  background:
+    radial-gradient(circle at 18% 7%,rgba(255,254,247,.98),transparent 31%),
+    radial-gradient(circle at 68% 13%,rgba(218,239,238,.58),transparent 29%),
+    radial-gradient(circle at 88% 41%,rgba(255,221,205,.3),transparent 24%),
+    linear-gradient(180deg,#f4eadc 0 53%,#e5c3a4 53.2%,#a96747 100%);
+}
+.immersive-ui .studio-stage::after {
+  background:
+    radial-gradient(circle at 13% 22%,rgba(255,255,255,.4) 0 2px,transparent 3px),
+    radial-gradient(circle at 73% 18%,rgba(232,153,145,.28) 0 3px,transparent 4px),
+    linear-gradient(90deg,rgba(64,39,24,.08),transparent 16%,transparent 84%,rgba(64,39,24,.08)),
+    linear-gradient(180deg,rgba(255,252,244,.24),transparent 23%,transparent 77%,rgba(69,38,22,.08));
+  background-size: 96px 88px,124px 112px,auto,auto;
+}
+.immersive-ui .table-cloth {
+  display: none !important;
+}
+.immersive-ui .depth-window {
+  border-color: #8a5a3d;
+  opacity: .72;
+  box-shadow:
+    0 20px 42px rgba(68,44,29,.18),
+    inset 0 0 0 4px rgba(255,244,220,.28),
+    inset 0 0 28px rgba(73,47,31,.12);
+}
+.immersive-ui .studio-light {
+  opacity: .58;
+}
+.immersive-ui .clay-stage-shell::before {
+  height: 47%;
+  border-top-color: rgba(91,53,31,.44);
+  background:
+    radial-gradient(ellipse at 47% 0,rgba(255,244,215,.3),transparent 46%),
+    repeating-linear-gradient(92deg,rgba(72,39,20,.1) 0 2px,transparent 2px 32px),
+    repeating-linear-gradient(3deg,rgba(255,237,202,.065) 0 2px,transparent 2px 17px),
+    linear-gradient(180deg,#c88b60,#a26543 54%,#7b4a31);
+  box-shadow:
+    inset 0 18px 42px rgba(255,226,188,.16),
+    inset 0 -28px 60px rgba(74,39,23,.12);
+  clip-path: polygon(2.5% 0,97.5% 0,100% 100%,0 100%);
+}
+.immersive-ui .stage-heading {
+  border-color: rgba(124,73,48,.2);
+  background: rgba(255,249,238,.9);
+  color: #604331;
+  box-shadow: 0 14px 34px rgba(73,42,25,.14);
+}
+.immersive-ui .stage-heading .eyebrow {
+  color: #aa735d;
+}
+.immersive-ui .view-modes {
+  border-color: rgba(125,78,52,.14);
+  background: rgba(236,214,192,.48);
+}
+.immersive-ui .view-modes button {
+  color: #8d6b56;
+}
+.immersive-ui .view-modes button.active {
+  background: #fffaf0;
+  color: #76442f;
+}
+.immersive-ui .phasebar {
+  border-color: rgba(255,248,230,.5);
+  background: rgba(105,70,51,.68);
+  box-shadow: 0 18px 42px rgba(54,31,18,.2);
+}
+.immersive-ui .phase.active {
+  border-color: rgba(216,126,95,.5);
+  background: #fff6e4;
+}
+.immersive-ui .workshop-dock {
+  border-color: rgba(111,69,45,.2);
+  background: rgba(255,247,232,.9);
+  box-shadow: 0 17px 42px rgba(55,31,17,.22);
+}
+.immersive-ui .dock-action {
+  color: #755844;
+}
+.immersive-ui .dock-action:hover {
+  background: rgba(163,92,62,.09);
+  color: #5f3d2b;
+}
+.immersive-ui .dock-action[aria-expanded="true"],
+.immersive-ui .dock-action[aria-pressed="true"] {
+  border-color: rgba(159,89,59,.16);
+  background: #fffaf0;
+  color: #713f2c;
+}
+.immersive-ui .journey-prompt {
+  position: fixed;
+  z-index: 92;
+  display: grid;
+  border: 2px solid rgba(154,88,61,.3);
+  background:
+    radial-gradient(circle at 12% 16%,rgba(255,255,255,.9),transparent 31%),
+    linear-gradient(145deg,#fff8e9,#f7e5cf);
+  box-shadow:
+    0 20px 48px rgba(54,29,16,.25),
+    0 0 0 5px rgba(255,248,232,.2);
+  animation: clayPromptIn .28s cubic-bezier(.2,.85,.32,1.2);
+}
+.immersive-ui .journey-prompt.is-new {
+  animation: clayPromptPop .62s cubic-bezier(.2,.8,.25,1.15);
+}
+.immersive-ui .journey-prompt.is-new .journey-action {
+  animation: clayActionNudge .62s ease-out;
+}
+.immersive-ui .journey-prompt::after {
+  content: "";
+  position: absolute;
+  right: 25px;
+  bottom: -8px;
+  width: 17px;
+  height: 17px;
+  border-right: 2px solid rgba(154,88,61,.3);
+  border-bottom: 2px solid rgba(154,88,61,.3);
+  background: #f7e5cf;
+  transform: rotate(45deg);
+}
+.immersive-ui .journey-mascot {
+  border-color: #fff8e8;
+  background: linear-gradient(145deg,#e6b187,#b96e4c);
+  box-shadow:
+    inset 0 5px 9px rgba(255,255,255,.26),
+    0 5px 12px rgba(113,60,38,.18);
+  animation: clayMascotBob 2.4s ease-in-out infinite;
+}
+.immersive-ui .journey-copy .eyebrow {
+  color: #ba765b;
+}
+.immersive-ui .journey-copy strong {
+  color: #5d3827;
+}
+.immersive-ui .journey-copy > span {
+  color: #8c6956;
+}
+.immersive-ui .journey-action {
+  width: 100%;
+  min-height: 36px;
+  grid-column: 2;
+  border-color: #8e4932;
+  border-radius: 11px;
+  background: linear-gradient(135deg,#d77755,#b9563c);
+  color: #fffaf1;
+  font-size: 9px;
+  box-shadow:
+    0 7px 16px rgba(132,61,39,.22),
+    inset 0 1px 0 rgba(255,255,255,.26);
+}
+.immersive-ui .journey-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: saturate(1.08);
+}
+.immersive-ui .journey-action:disabled {
+  background: #e5d3bd;
+}
+.immersive-ui .clay-buddy {
+  opacity: .82;
+}
+.modal.showing-result {
+  background: rgba(52,32,20,.55);
+}
+.modal.showing-result .modal-card {
+  border-color: rgba(132,83,54,.2);
+  background:
+    radial-gradient(circle at 50% 6%,rgba(255,255,255,.88),transparent 34%),
+    linear-gradient(145deg,#fff9eb,#efdcc4);
+  color: #563827;
+  box-shadow: 0 35px 100px rgba(42,23,12,.38);
+}
+.modal.showing-result .modal-close {
+  border-color: rgba(105,64,43,.18);
+  background: rgba(255,250,239,.82);
+  color: #77513b;
+}
+.modal.showing-result .result-view .eyebrow {
+  color: #b87558;
+}
+.modal.showing-result .result-copy {
+  color: #836554;
+}
+.modal.showing-result .result-specs span {
+  border-color: rgba(126,77,50,.14);
+  background: rgba(255,251,241,.64);
+  color: #7a5743;
+}
+.modal.showing-result .result-angle-picker {
+  border-color: rgba(126,77,50,.15);
+  background: rgba(255,251,241,.68);
+}
+.modal.showing-result .result-angle-picker > span,
+.modal.showing-result .result-angle-picker button {
+  color: #886650;
+}
+.modal.showing-result .result-angle-picker button.active {
+  border-color: rgba(178,82,51,.2);
+  background: linear-gradient(135deg,#db7f5e,#bc5b3f);
+  color: #fffaf0;
+}
+.modal.showing-result .result-actions .soft-btn {
+  border-color: rgba(126,77,50,.16);
+  background: rgba(255,251,241,.72);
+  color: #76513b;
+}
+.modal.showing-result .result-art {
+  width: 360px;
+  height: 360px;
+  overflow: hidden;
+}
+@keyframes clayPromptIn {
+  from { opacity: 0; transform: translateY(12px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes clayMascotBob {
+  0%,100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-3px) rotate(2deg); }
+}
+@keyframes clayPromptPop {
+  0% { transform: translateY(9px) scale(.96); }
+  52% { transform: translateY(-3px) scale(1.025); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes clayActionNudge {
+  0%,100% { transform: translateY(0); }
+  35% { transform: translateY(-2px); box-shadow: 0 10px 21px rgba(132,61,39,.29); }
+}
+@media (max-height: 560px) and (orientation: landscape) {
+  .immersive-ui .journey-action {
+    min-height: 31px;
+    font-size: 7px;
+  }
+  .immersive-ui .journey-prompt::after {
+    right: 18px;
+  }
 }

@@ -240,38 +240,68 @@
       };
     }
 
+    profileMaxRadius() {
+      const profile = this.state && this.state.profile ? this.state.profile : [];
+      if (!profile.length) return .72;
+      return Math.max(.2, ...profile);
+    }
+
+    formWidthRatio() {
+      const ratios = {
+        mug: .76,
+        goblet: .76,
+        tumbler: .72,
+        bowl: 1.34,
+        plate: 1.5,
+        roundVase: .82,
+        plumVase: .78,
+        bottle: .64,
+        jar: .84,
+        planter: .9,
+        hexPlanter: .94,
+        widePlanter: 1.42,
+        custom: .86
+      };
+      return ratios[this.state && this.state.sampleId] || .86;
+    }
+
     geometry() {
       const rawClay = this.state && this.state.rawClay;
-      const radiusScale = Math.min(this.width, this.height) * (rawClay ? 0.26 : 0.34);
       const heightFactor = clamp(this.state && this.state.heightFactor ? this.state.heightFactor : 1, .52, 1.12);
-      const baseBottom = rawClay ? 88 : 158;
-      const baseSpan = rawClay ? 176 : 316;
-      const span = baseSpan * heightFactor;
+      const progress = clamp((heightFactor - .62) / .4, 0, 1);
+      const span = this.height * (rawClay ? Math.max(.19, this.width / this.height * .095) : .42 + progress * .09);
+      const maxRadius = this.profileMaxRadius();
+      const widthRatio = rawClay ? 1.56 : this.formWidthRatio();
+      const radiusFromProfile = span * widthRatio / (maxRadius * 2);
+      const radiusScale = Math.min(radiusFromProfile, this.width * (rawClay ? .34 : .31));
       return {
         cx: this.width * 0.5,
-        cy: this.height * (rawClay ? 0.62 : 0.55),
+        cy: this.height * (rawClay ? .63 : .58),
         centerY: 0,
-        top: baseBottom - span,
+        top: -span * .5,
         span,
         radiusScale,
         focal: radiusScale * 5.7,
-        camera: radiusScale * 5.7
+        camera: radiusScale * 5.7,
+        heightFactor,
+        widthRatio
       };
     }
 
-    materialColor(u, v, region) {
+    materialColor(u, v, region, options) {
       const state = this.state;
       const clay = state.clay || { base: '#b87555', light: '#dfa17d', deep: '#76452f' };
       let color = hexRgb(clay.base);
       let glazed = false;
       let finish = state.finish || { specular: .2, shine: .25 };
       let glazeColor = null;
+      const surfaceBaseOnly = !!(options && options.surfaceBaseOnly);
       if (region === 'rim' && state.glaze && state.glaze.rim) { glazeColor = state.glaze.rim; glazed = true; }
       else if (region === 'inside' && state.glaze && state.glaze.inside) { glazeColor = state.glaze.inside; glazed = true; }
       else if (region === 'foot' && state.glaze && state.glaze.foot) { glazeColor = state.glaze.foot; glazed = true; }
       else if (state.glaze && state.glaze.body) { glazeColor = state.glaze.body; glazed = true; }
       if (glazeColor) color = hexRgb(glazeColor.hex);
-      if (glazeColor && glazeColor.secondary) {
+      if (glazeColor && glazeColor.secondary && !(options && options.baseOnly)) {
         const accent = hexRgb(glazeColor.secondary);
         const pattern = glazeColor.pattern || 'gradient';
         if (pattern === 'gradient') {
@@ -292,27 +322,72 @@
       if (glazed && !state.finalized) color = mixRgb(color, hexRgb(clay.base), .1);
       if (!glazed && state.bisqueDone && !state.finalized) color = mixRgb(color, { r: 245, g: 230, b: 205 }, .12);
 
-      const texture = state.texture || 'smooth';
+      const texture = surfaceBaseOnly ? 'smooth' : (state.texture || 'smooth');
       const noise = Math.sin(u * 218.7 + v * 391.3) * .5 + .5;
       let mod = 1;
-      if (texture === 'rings') mod += Math.sin(v * 145) * .014;
-      if (texture === 'linen') mod += (Math.sin(u * 620) * Math.sin(v * 480)) * .035;
-      if (texture === 'crackle') mod += Math.sin((u * 28 + v * 15) * Math.PI) * .025;
-      if (texture === 'hammer') mod += (noise > .84 ? -.08 : .018);
-      if (texture === 'carve') mod += Math.sin((u * 18 + v * 34) * Math.PI) > .72 ? -.07 : .012;
-      if (texture === 'coarse') mod += noise * .08 - .04;
-      if (glazed) mod += (noise - .5) * .03;
-      if (!glazed && state.finalized) mod += noise * .055 - .022;
+      if (!surfaceBaseOnly) {
+        if (texture === 'rings') mod += Math.sin(v * 145) * .014;
+        if (texture === 'linen') mod += (Math.sin(u * 620) * Math.sin(v * 480)) * .035;
+        if (texture === 'crackle') mod += Math.sin((u * 28 + v * 15) * Math.PI) * .025;
+        if (texture === 'hammer') mod += (noise > .84 ? -.08 : .018);
+        if (texture === 'carve') mod += Math.sin((u * 18 + v * 34) * Math.PI) > .72 ? -.07 : .012;
+        if (texture === 'coarse') mod += noise * .08 - .04;
+        if (glazed) mod += (noise - .5) * .03;
+        if (!glazed && state.finalized) mod += noise * .055 - .022;
+      }
       if (state.finalized) {
         const tempShift = clamp(((state.fireTemperature || 1240) - 900) / 380, 0, 1);
         color = mixRgb(color, { r: color.r * .55, g: color.g * .5, b: color.b * .47 }, .05 + tempShift * .1);
         if (state.atmosphere === 'reduction') color = mixRgb(color, { r: color.r * .72, g: color.g * .66, b: color.b * .61 }, .13);
         if (state.atmosphere === 'oxidation') color = mixRgb(color, { r: Math.min(255, color.r * 1.08), g: Math.min(255, color.g * 1.06), b: Math.min(255, color.b * 1.02) }, .08);
-        if (tempShift > .75 && v > .45) mod += Math.sin(u * 21 + v * 15) * .055;
+        if (!surfaceBaseOnly && tempShift > .75 && v > .45) mod += Math.sin(u * 21 + v * 15) * .055;
       }
       color = { r: color.r * mod, g: color.g * mod, b: color.b * mod };
       const activeFinish = glazed ? (state.finalized ? finish : { ...finish, specular: finish.specular * .36, shine: finish.shine * .32 }) : { specular: .018, shine: .025 };
       return { color, glazed, finish: activeFinish };
+    }
+
+    drawGlazedBody(context, geometry) {
+      const glaze = this.state.glaze && this.state.glaze.body;
+      if (!glaze) return;
+
+      const pattern = glaze.pattern || 'gradient';
+      const followsVerticalGradient = pattern === 'gradient' || pattern === 'drip';
+      const top = this.project(0, 0, 0, geometry);
+      const bottom = this.project(0, 0, 1, geometry);
+      const bodyGradient = context.createLinearGradient(0, top.y, 0, bottom.y);
+      const fixedColor = this.materialColor(.5, .46, 'body', {
+        surfaceBaseOnly: true,
+        baseOnly: true
+      }).color;
+      const stops = followsVerticalGradient ? [.03, .2, .42, .64, .82, .98] : [0];
+
+      stops.forEach(sampleV => {
+        const color = followsVerticalGradient
+          ? this.materialColor(.5, sampleV, 'body', { surfaceBaseOnly: true }).color
+          : fixedColor;
+        bodyGradient.addColorStop(sampleV, rgbColor(color.r, color.g, color.b));
+      });
+
+      context.save();
+      this.silhouettePath(context, geometry);
+      context.clip();
+      context.fillStyle = bodyGradient;
+      context.fillRect(0, 0, this.width, this.height);
+
+      const formShade = context.createLinearGradient(
+        geometry.cx - geometry.radiusScale * 1.08,
+        0,
+        geometry.cx + geometry.radiusScale * 1.08,
+        0
+      );
+      formShade.addColorStop(0, 'rgba(255,255,248,.08)');
+      formShade.addColorStop(.3, 'rgba(255,255,255,0)');
+      formShade.addColorStop(.72, 'rgba(71,52,39,.025)');
+      formShade.addColorStop(1, 'rgba(56,38,29,.1)');
+      context.fillStyle = formShade;
+      context.fillRect(0, 0, this.width, this.height);
+      context.restore();
     }
 
     drawHandles(context, geometry, front) {
@@ -394,73 +469,74 @@
       }
 
       this.drawHandles(context, geometry, false);
-      this.drawBottomCap(context, geometry);
+      const bodyGlazed = !!(state.glaze && state.glaze.body);
+      if (!bodyGlazed) this.drawBottomCap(context, geometry);
 
-      const vertices = [];
-      for (let i = 0; i < rings; i += 1) {
-        const v = i / (rings - 1);
-        const radius = this.profileRadius(v) * geometry.radiusScale;
-        const row = [];
-        for (let j = 0; j < segments; j += 1) {
-          row.push(this.project(this.deformedRadius(v, j / segments * TAU) * geometry.radiusScale, j / segments * TAU, v, geometry));
+      if (bodyGlazed) {
+        this.drawGlazedBody(context, geometry);
+      } else {
+        const vertices = [];
+        for (let i = 0; i < rings; i += 1) {
+          const v = i / (rings - 1);
+          const row = [];
+          for (let j = 0; j < segments; j += 1) {
+            row.push(this.project(this.deformedRadius(v, j / segments * TAU) * geometry.radiusScale, j / segments * TAU, v, geometry));
+          }
+          vertices.push(row);
         }
-        vertices.push(row);
-      }
 
-      const faces = [];
-      for (let i = 0; i < rings - 1; i += 1) {
-        for (let j = 0; j < segments; j += 1) {
-          const j2 = (j + 1) % segments;
-          const a = vertices[i][j], b = vertices[i][j2], c = vertices[i + 1][j2], d = vertices[i + 1][j];
-          faces.push({ a, b, c, d, depth: (a.z + b.z + c.z + d.z) / 4, i, j });
+        const faces = [];
+        for (let i = 0; i < rings - 1; i += 1) {
+          for (let j = 0; j < segments; j += 1) {
+            const j2 = (j + 1) % segments;
+            const a = vertices[i][j], b = vertices[i][j2], c = vertices[i + 1][j2], d = vertices[i + 1][j];
+            faces.push({ a, b, c, d, depth: (a.z + b.z + c.z + d.z) / 4, i, j });
+          }
         }
-      }
-      faces.sort((a, b) => b.depth - a.depth);
+        faces.sort((a, b) => b.depth - a.depth);
 
-      const light = normalize([-.42, .72, -.55]);
-      for (let f = 0; f < faces.length; f += 1) {
-        const face = faces[f];
-        const v = (face.i + .5) / (rings - 1);
-        const u = (face.j + .5) / segments;
-        const material = this.materialColor(u, v, 'body');
-        const edge1 = [face.b.wx - face.a.wx, face.b.wy - face.a.wy, face.b.z - face.a.z];
-        const edge2 = [face.d.wx - face.a.wx, face.d.wy - face.a.wy, face.d.z - face.a.z];
-        let normal = normalize([
-          edge1[1] * edge2[2] - edge1[2] * edge2[1],
-          edge1[2] * edge2[0] - edge1[0] * edge2[2],
-          edge1[0] * edge2[1] - edge1[1] * edge2[0]
-        ]);
-        if (normal[2] > 0) normal = [-normal[0], -normal[1], -normal[2]];
-        const diffuse = Math.max(0, normal[0] * light[0] + normal[1] * light[1] + normal[2] * light[2]);
-        const edgeOcclusion = .975 + Math.sin(v * Math.PI) * .025;
-        const shade = state.rawClay
-          ? (.86 + diffuse * .14) * edgeOcclusion
-          : (.78 + diffuse * .24) * edgeOcclusion;
-        const specular = material.glazed ? Math.pow(diffuse, 18 + material.finish.specular * 42) * material.finish.specular * (.35 + (state.gloss == null ? .5 : state.gloss) * .9) : 0;
-        const fresnel = material.glazed ? Math.pow(1 - Math.min(1, Math.abs(normal[2])), 2) : 0;
-        const edgeGlow = fresnel * (0.035 + (state.gloss == null ? .5 : state.gloss) * .085);
-        const r = material.color.r * shade + 255 * specular + 205 * edgeGlow;
-        const g = material.color.g * shade + 255 * specular + 238 * edgeGlow;
-        const b = material.color.b * shade + 255 * specular + 226 * edgeGlow;
-        context.fillStyle = rgbColor(r, g, b);
-        context.strokeStyle = context.fillStyle;
-        context.lineWidth = state.rawClay ? .9 : 0;
-        context.beginPath();
-        context.moveTo(face.a.x, face.a.y);
-        context.lineTo(face.b.x, face.b.y);
-        context.lineTo(face.c.x, face.c.y);
-        context.lineTo(face.d.x, face.d.y);
-        context.closePath();
-        context.fill();
-        if (state.rawClay) context.stroke();
+        const light = normalize([-.42, .72, -.55]);
+        for (let f = 0; f < faces.length; f += 1) {
+          const face = faces[f];
+          const v = (face.i + .5) / (rings - 1);
+          const u = (face.j + .5) / segments;
+          const material = this.materialColor(u, v, 'body');
+          const edge1 = [face.b.wx - face.a.wx, face.b.wy - face.a.wy, face.b.z - face.a.z];
+          const edge2 = [face.d.wx - face.a.wx, face.d.wy - face.a.wy, face.d.z - face.a.z];
+          let normal = normalize([
+            edge1[1] * edge2[2] - edge1[2] * edge2[1],
+            edge1[2] * edge2[0] - edge1[0] * edge2[2],
+            edge1[0] * edge2[1] - edge1[1] * edge2[0]
+          ]);
+          if (normal[2] > 0) normal = [-normal[0], -normal[1], -normal[2]];
+          const diffuse = Math.max(0, normal[0] * light[0] + normal[1] * light[1] + normal[2] * light[2]);
+          const edgeOcclusion = .998;
+          const shade = (.84 + diffuse * .16) * edgeOcclusion;
+          const fresnel = 0;
+          const edgeGlow = fresnel * (0.035 + (state.gloss == null ? .5 : state.gloss) * .085);
+          const r = material.color.r * shade + 205 * edgeGlow;
+          const g = material.color.g * shade + 238 * edgeGlow;
+          const b = material.color.b * shade + 226 * edgeGlow;
+          context.fillStyle = rgbColor(r, g, b);
+          context.strokeStyle = context.fillStyle;
+          context.lineWidth = .55;
+          context.beginPath();
+          context.moveTo(face.a.x, face.a.y);
+          context.lineTo(face.b.x, face.b.y);
+          context.lineTo(face.c.x, face.c.y);
+          context.lineTo(face.d.x, face.d.y);
+          context.closePath();
+          context.fill();
+          context.stroke();
+        }
       }
 
       this.drawFormLight(context, geometry);
       this.drawSurfaceDecorations(context, geometry);
+      this.drawSurfaceEffects(context, geometry);
       this.drawHandles(context, geometry, true);
       if (state.rawClay) this.drawClayTop(context, geometry);
       else this.drawMouth(context, geometry);
-      this.drawSurfaceEffects(context, geometry);
       if (this.freeCanvas) context.drawImage(this.freeCanvas, 0, 0, this.width, this.height);
     }
 
@@ -760,15 +836,20 @@
       context.lineWidth = 1.1;
       context.stroke();
 
-      const frontRim = outer.filter((point, index) => point.z <= 0 && index < outer.length * .5 + 3);
-      if (frontRim.length > 2) {
+      context.save();
+      context.lineCap = 'round';
+      context.strokeStyle = 'rgba(255,246,229,.42)';
+      context.lineWidth = Math.max(1.2, topR * .015);
+      for (let i = 0; i < outer.length; i += 1) {
+        const a = outer[i];
+        const b = outer[(i + 1) % outer.length];
+        if (a.z > 0 || b.z > 0) continue;
         context.beginPath();
-        context.moveTo(frontRim[0].x, frontRim[0].y);
-        for (let i = 1; i < frontRim.length; i += 1) context.lineTo(frontRim[i].x, frontRim[i].y);
-        context.strokeStyle = 'rgba(255,240,219,.34)';
-        context.lineWidth = Math.max(1.2, topR * .015);
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
         context.stroke();
       }
+      context.restore();
       context.restore();
     }
 
@@ -799,6 +880,21 @@
       context.beginPath();
       context.moveTo(left[0].x, left[0].y);
       left.forEach(p => context.lineTo(p.x, p.y));
+      if (this.state && this.state.glaze && this.state.glaze.body) {
+        const bottomArc = this.deformedCirclePoints(.998, .98, geometry, 72);
+        const bottomLeft = bottomArc.reduce((best, point) => point.x < best.x ? point : best);
+        const bottomRight = bottomArc.reduce((best, point) => point.x > best.x ? point : best);
+        const bottomLowest = bottomArc.reduce((best, point) => point.y > best.y ? point : best);
+        const arcDepth = Math.max(0, bottomLowest.y - Math.max(bottomLeft.y, bottomRight.y));
+        context.bezierCurveTo(
+          bottomLeft.x,
+          bottomLeft.y + arcDepth * 4 / 3,
+          bottomRight.x,
+          bottomRight.y + arcDepth * 4 / 3,
+          bottomRight.x,
+          bottomRight.y
+        );
+      }
       for (let i = right.length - 1; i >= 0; i -= 1) context.lineTo(right[i].x, right[i].y);
       context.closePath();
     }
@@ -819,7 +915,103 @@
       light.addColorStop(1, 'rgba(79,48,33,.16)');
       context.fillStyle = light;
       context.fillRect(0, 0, this.width, this.height);
+      const verticalLight = context.createLinearGradient(
+        0,
+        geometry.cy - geometry.span * .54,
+        0,
+        geometry.cy + geometry.span * .54
+      );
+      verticalLight.addColorStop(0, 'rgba(255,253,244,.08)');
+      verticalLight.addColorStop(.28, 'rgba(255,255,255,.015)');
+      verticalLight.addColorStop(.72, 'rgba(255,255,255,0)');
+      verticalLight.addColorStop(1, 'rgba(72,43,30,.08)');
+      context.fillStyle = verticalLight;
+      context.fillRect(0, 0, this.width, this.height);
       context.restore();
+    }
+
+    drawSurfacePattern(context, geometry) {
+      const state = this.state;
+      const glaze = state && state.glaze && state.glaze.body;
+      if (!glaze) return;
+      const pattern = glaze.pattern || 'gradient';
+      const finishId = state.finish && state.finish.id;
+      const needsDrip = pattern === 'drip' || finishId === 'drip';
+      const needsMarble = pattern === 'marble';
+      const needsCrystal = pattern === 'crystal' || finishId === 'crystal';
+      const needsSpeckle = pattern === 'speckle';
+      if (!needsDrip && !needsMarble && !needsCrystal && !needsSpeckle) return;
+
+      const accent = hexRgb(glaze.secondary || glaze.hex || '#f8f0da');
+      const drawMappedLines = (lines, color, width) => {
+        context.save();
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.strokeStyle = color;
+        context.lineWidth = width;
+        lines.forEach(points => {
+          let previous = null;
+          points.forEach(sample => {
+            const point = this.surfacePoint(sample.angle, sample.v, geometry);
+            const visible = point.z < geometry.radiusScale * .07;
+            if (visible && previous) {
+              context.beginPath();
+              context.moveTo(previous.x, previous.y);
+              context.lineTo(point.x, point.y);
+              context.stroke();
+            }
+            previous = visible ? point : null;
+          });
+        });
+        context.restore();
+      };
+
+      if (needsDrip) {
+        const lines = [];
+        for (let i = 0; i < 13; i += 1) {
+          const u = .08 + i / 13 * .84;
+          const phase = Math.sin(i * 2.37) * .025;
+          const points = [];
+          for (let step = 0; step <= 9; step += 1) {
+            const v = .09 + step / 9 * (.18 + (i % 4) * .045);
+            points.push({ angle: u * TAU + Math.sin(step * .8 + i) * .012 + phase, v });
+          }
+          lines.push(points);
+        }
+        drawMappedLines(lines, rgbColor(accent.r * 1.08, accent.g * 1.06, accent.b * 1.02, .24), 2.1);
+      }
+
+      if (needsMarble) {
+        const lines = [];
+        for (let band = 0; band < 7; band += 1) {
+          const points = [];
+          for (let step = 0; step <= 28; step += 1) {
+            const u = step / 28;
+            const v = .16 + band * .1 + Math.sin(u * Math.PI * 4 + band * 1.2) * .025;
+            points.push({ angle: u * TAU, v });
+          }
+          lines.push(points);
+        }
+        drawMappedLines(lines, rgbColor(accent.r * .78, accent.g * .79, accent.b * .8, .19), 1.35);
+      }
+
+      if (needsSpeckle || needsCrystal) {
+        const rand = seeded(needsCrystal ? 733 : 417);
+        const count = needsCrystal ? 92 : 104;
+        for (let i = 0; i < count; i += 1) {
+          const angle = rand() * TAU;
+          const v = .08 + rand() * .82;
+          const point = this.surfacePoint(angle, v, geometry);
+          if (point.z > geometry.radiusScale * .04) continue;
+          const radius = (needsCrystal ? .8 + rand() * 2.4 : .45 + rand() * 1.35) * point.scale;
+          context.fillStyle = needsCrystal
+            ? rgbColor(255, 252, 232, .15 + rand() * .28)
+            : rgbColor(accent.r * .58, accent.g * .58, accent.b * .6, .1 + rand() * .16);
+          context.beginPath();
+          context.arc(point.x, point.y, radius, 0, TAU);
+          context.fill();
+        }
+      }
     }
 
     drawSurfaceEffects(context, geometry) {
@@ -850,83 +1042,40 @@
         context.fillStyle = glint;
         context.fillRect(0, 0, this.width, this.height);
 
-        const rim = this.uvToScreen(.5, .08);
-        const foot = this.uvToScreen(.5, .9);
-        if (rim && foot) {
-          const thickness = context.createLinearGradient(0, rim.y, 0, foot.y);
-          thickness.addColorStop(0, 'rgba(40,32,26,' + (.16 + gloss * .1).toFixed(3) + ')');
-          thickness.addColorStop(.1, 'rgba(255,255,248,.08)');
-          thickness.addColorStop(.46, 'rgba(255,255,255,0)');
-          thickness.addColorStop(.82, 'rgba(78,52,38,.035)');
-          thickness.addColorStop(1, 'rgba(49,34,26,.2)');
-          context.fillStyle = thickness;
-          context.fillRect(0, rim.y, this.width, Math.max(0, foot.y - rim.y));
+        const sheenTop = this.uvToScreen(.43, .09);
+        const sheenMiddle = this.uvToScreen(.46, .47);
+        const sheenBottom = this.uvToScreen(.43, .89);
+        if (sheenTop && sheenMiddle && sheenBottom) {
+          context.save();
+          context.globalCompositeOperation = 'screen';
+          context.filter = 'blur(' + Math.max(3, geometry.radiusScale * .035).toFixed(1) + 'px)';
+          context.lineCap = 'round';
+          context.lineJoin = 'round';
+          context.strokeStyle = 'rgba(255,255,250,' + (.08 + gloss * .09).toFixed(3) + ')';
+          context.lineWidth = Math.max(8, geometry.radiusScale * .11);
+          context.beginPath();
+          context.moveTo(sheenTop.x, sheenTop.y);
+          context.bezierCurveTo(
+            sheenTop.x - geometry.radiusScale * .025,
+            sheenTop.y + geometry.span * .28,
+            sheenMiddle.x + geometry.radiusScale * .018,
+            sheenMiddle.y,
+            sheenBottom.x,
+            sheenBottom.y
+          );
+          context.stroke();
+          context.strokeStyle = 'rgba(238,252,249,' + (.07 + gloss * .08).toFixed(3) + ')';
+          context.lineWidth = Math.max(2.5, geometry.radiusScale * .025);
+          context.stroke();
+          context.restore();
         }
 
-        context.save();
-        context.translate(geometry.cx - geometry.radiusScale * .33, geometry.cy - geometry.radiusScale * .5);
-        context.rotate(-.11);
-        const windowSheen = context.createLinearGradient(0, 0, 42, 0);
-        windowSheen.addColorStop(0, 'rgba(255,255,250,0)');
-        windowSheen.addColorStop(.42, 'rgba(255,255,250,' + (.09 + gloss * .16).toFixed(3) + ')');
-        windowSheen.addColorStop(.62, 'rgba(235,248,246,' + (.06 + gloss * .1).toFixed(3) + ')');
-        windowSheen.addColorStop(1, 'rgba(255,255,255,0)');
-        context.fillStyle = windowSheen;
-        context.fillRect(-14, 0, 58, Math.max(80, geometry.span * .62));
-        context.fillStyle = 'rgba(255,255,250,' + (.055 + gloss * .075).toFixed(3) + ')';
-        context.fillRect(58, 46, 15, Math.max(52, geometry.span * .34));
-        context.restore();
+        this.drawSurfacePattern(context, geometry);
 
         this.silhouettePath(context, geometry);
         context.strokeStyle = 'rgba(255,250,234,' + (.1 + gloss * .1).toFixed(3) + ')';
         context.lineWidth = 1.3;
         context.stroke();
-      }
-
-      const glazePattern = state.glaze && state.glaze.body && state.glaze.body.pattern;
-      if (bodyGlazed && glazePattern === 'drip') {
-        const rand = seeded(337);
-        for (let i = 0; i < 11; i += 1) {
-          const x = this.width * (.24 + rand() * .52);
-          const length = 34 + rand() * 92;
-          const drip = context.createLinearGradient(x, this.height * .25, x, this.height * .25 + length);
-          drip.addColorStop(0, 'rgba(255,250,235,.4)');
-          drip.addColorStop(.18, 'rgba(246,238,215,.22)');
-          drip.addColorStop(.72, 'rgba(240,230,203,.1)');
-          drip.addColorStop(1, 'rgba(255,248,229,0)');
-          context.fillStyle = drip;
-          context.beginPath();
-          context.ellipse(x, this.height * .25 + length * .42, 1.6 + rand() * 1.8, length * .44, 0, 0, TAU);
-          context.fill();
-        }
-      }
-      if (bodyGlazed && (glazePattern === 'speckle' || glazePattern === 'crystal')) {
-        const rand = seeded(glazePattern === 'crystal' ? 733 : 417);
-        for (let i = 0; i < 72; i += 1) {
-          context.fillStyle = glazePattern === 'crystal'
-            ? 'rgba(255,253,236,' + (.12 + rand() * .24).toFixed(2) + ')'
-            : 'rgba(74,64,48,' + (.08 + rand() * .17).toFixed(2) + ')';
-          context.beginPath();
-          context.arc(
-            this.width * (.22 + rand() * .56),
-            this.height * (.25 + rand() * .56),
-            .45 + rand() * (glazePattern === 'crystal' ? 2.1 : 1.2),
-            0,
-            TAU
-          );
-          context.fill();
-        }
-      }
-      if (bodyGlazed && glazePattern === 'marble') {
-        context.strokeStyle = 'rgba(255,252,239,.12)';
-        context.lineWidth = 1.2;
-        for (let i = 0; i < 7; i += 1) {
-          const y = this.height * (.3 + i * .055);
-          context.beginPath();
-          context.moveTo(this.width * .25, y);
-          context.bezierCurveTo(this.width * .4, y - 17, this.width * .55, y + 18, this.width * .76, y - 4);
-          context.stroke();
-        }
       }
 
       context.save();
@@ -956,28 +1105,6 @@
           context.lineTo(x + rand() * 20 - 10, y + 15 + rand() * 21);
           context.lineTo(x + rand() * 15 - 7, y + 30 + rand() * 22);
           context.stroke();
-        }
-      }
-      if (bodyGlazed && state.finish && state.finish.id === 'drip') {
-        const rand = seeded(929);
-        for (let i = 0; i < 9; i += 1) {
-          const x = this.width * (.27 + rand() * .47);
-          const y = this.height * .275;
-          context.beginPath();
-          context.moveTo(x - 2, y);
-          context.quadraticCurveTo(x - 7, y + 18 + rand() * 30, x, y + 32 + rand() * 42);
-          context.quadraticCurveTo(x + 7, y + 18, x + 2, y);
-          context.fillStyle = 'rgba(255,255,255,.07)';
-          context.fill();
-        }
-      }
-      if (bodyGlazed && state.finish && state.finish.id === 'crystal') {
-        const rand = seeded(1011);
-        for (let i = 0; i < 28; i += 1) {
-          context.fillStyle = 'rgba(255,255,246,' + (.12 + rand() * .25).toFixed(2) + ')';
-          context.beginPath();
-          context.arc(this.width * (.25 + rand() * .5), this.height * (.3 + rand() * .45), .7 + rand() * 2.1, 0, TAU);
-          context.fill();
         }
       }
       if (state.finalized) {

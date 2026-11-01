@@ -80,6 +80,9 @@
     quickWheelBtn: $('quickWheelBtn'),
     quickWheelText: $('quickWheelText'),
     dockPanelText: $('dockPanelText'),
+    journeyTitle: $('journeyTitle'),
+    journeyCopy: $('journeyCopy'),
+    nextActionBtn: $('nextActionBtn'),
     leftDrawerCloseBtn: $('leftDrawerCloseBtn'),
     panelCloseBtn: $('panelCloseBtn'),
     presentationBtn: $('presentationBtn'),
@@ -185,6 +188,7 @@
   let handActionFeedback = { text: '', until: 0 };
   let handDeformCooldown = 0;
   let resultExportCache = { angle: null, dataUrl: '' };
+  let lastJourneySignature = '';
   let firingTimer = null;
   let firingTimeout = null;
   let firingActive = false;
@@ -242,7 +246,8 @@
       wheelSpeed: state.wheelSpeed,
       finalized: state.finalized,
       fireTemperature: state.temperature,
-      atmosphere: state.atmosphere
+      atmosphere: state.atmosphere,
+      sampleId: state.sampleId
     };
   }
 
@@ -618,8 +623,80 @@
     return map[state.phase];
   }
 
+  function nextActionConfig() {
+    if (state.phase === 'clay') {
+      if (!state.wheelOn) {
+        return { title: '先启动转盘', copy: '转盘转起来后，泥团才会开始受力。', label: '启动转盘', action: 'power', disabled: false };
+      }
+      if (state.knead < 100) {
+        return { title: '把泥团揉匀', copy: '也可以直接用双手揉压，准备好后进入塑形。', label: '揉匀并开始', action: 'quick-knead', disabled: false };
+      }
+      return { title: '泥料已经准备好', copy: '现在进入自由手捏，开始决定器物的轮廓。', label: '开始手捏', action: 'go-sculpt', disabled: false };
+    }
+    if (state.phase === 'sculpt') {
+      return { title: '捏出你想要的器型', copy: '上下改变高度，左右调整器壁，满意后进入修边。', label: '我捏好了，下一步', action: 'go-dry', disabled: false };
+    }
+    if (state.phase === 'dry') {
+      if (dryTimer) {
+        return { title: '坯体正在自然阴干', copy: '等待水分缓慢排出，避免过快干燥造成开裂。', label: '正在阴干 ' + Math.round(state.dryProgress) + '%', action: 'none', disabled: true };
+      }
+      if (state.dryProgress >= 100) {
+        return { title: '坯体已经干燥完成', copy: '接下来进入素烧，让坯体变得坚固。', label: '进入素烧', action: 'go-bisque', disabled: false };
+      }
+      return { title: '让坯体慢慢干透', copy: '开始自然阴干后，页面会实时显示进度。', label: '开始自然干燥', action: 'begin-dry', disabled: false };
+    }
+    if (state.phase === 'bisque') {
+      return { title: '进行低温素烧', copy: '素烧会让坯体变硬，并固定当前轮廓。', label: '开始素烧', action: 'start-bisque', disabled: firingActive };
+    }
+    if (state.phase === 'decorate') {
+      if (!state.hasArtwork && !Object.values(state.glaze).some(Boolean)) {
+        return { title: '给器物上釉或彩绘', copy: '完成至少一处装饰后，就可以送入本烧。', label: '打开装饰面板', action: 'open-panel', disabled: false };
+      }
+      return { title: '装饰已经完成', copy: '确认釉色和背面图案后，进入最后本烧。', label: '送入本烧', action: 'go-fire', disabled: false };
+    }
+    return { title: '选择最终烧成效果', copy: '温度和窑内气氛会决定最后的釉色。', label: '开始本烧', action: 'start-fire', disabled: firingActive };
+  }
+
+  function updateJourneyPrompt() {
+    if (!els.nextActionBtn || !els.journeyTitle || !els.journeyCopy) return;
+    const config = nextActionConfig();
+    els.journeyTitle.textContent = config.title;
+    els.journeyCopy.textContent = config.copy;
+    els.nextActionBtn.textContent = config.label;
+    els.nextActionBtn.disabled = config.disabled;
+    els.nextActionBtn.dataset.nextAction = config.action;
+    const signature = [state.phase, config.title, config.action, config.label].join('|');
+    if (els.journeyPrompt && signature !== lastJourneySignature) {
+      lastJourneySignature = signature;
+      els.journeyPrompt.classList.remove('is-new');
+      void els.journeyPrompt.offsetWidth;
+      els.journeyPrompt.classList.add('is-new');
+      window.setTimeout(() => els.journeyPrompt.classList.remove('is-new'), 620);
+    }
+  }
+
+  function runNextAction() {
+    const action = els.nextActionBtn.dataset.nextAction;
+    if (action === 'power') togglePower();
+    else if (action === 'quick-knead') quickKnead();
+    else if (action === 'go-sculpt') setPhase('sculpt');
+    else if (action === 'go-dry') setPhase('dry');
+    else if (action === 'begin-dry') beginDry();
+    else if (action === 'go-bisque') setPhase('bisque');
+    else if (action === 'start-bisque') openKiln('bisque');
+    else if (action === 'open-panel') {
+      setWorkshopDrawer('panel');
+      if (state.decorMode !== 'fill' && state.decorMode !== 'paint') {
+        state.decorMode = 'fill';
+        renderPanel();
+      }
+    } else if (action === 'go-fire') setPhase('fire');
+    else if (action === 'start-fire') openKiln('final');
+  }
+
   function renderAll() {
     const meta = phaseMeta();
+    document.body.dataset.phase = state.phase;
     els.stageEyebrow.textContent = meta[0];
     els.panelEyebrow.textContent = meta[0];
     els.stageTitle.textContent = meta[1];
@@ -648,6 +725,7 @@
         : state.phase === 'fire'
           ? '温控与本烧'
           : '器型与下一步';
+    updateJourneyPrompt();
     els.phases.forEach((button, index) => {
       const current = phaseOrder.indexOf(state.phase);
       button.classList.toggle('active', button.dataset.phase === state.phase);
@@ -966,6 +1044,7 @@
         stamp.draw(canvas.getContext('2d'), 74, state.stampColor);
       });
     }
+    updateJourneyPrompt();
   }
 
   function setPhase(phase) {
@@ -1479,6 +1558,7 @@
       const bar = $('dryBar'), text = $('dryText');
       if (bar) bar.style.width = state.dryProgress + '%';
       if (text) text.textContent = Math.round(state.dryProgress) + '%';
+      updateJourneyPrompt();
       if (state.dryProgress >= 100) {
         clearInterval(dryTimer);
         dryTimer = null;
@@ -1495,6 +1575,7 @@
   function openKiln(mode) {
     if (firingActive) return;
     firingActive = true;
+    els.modal.classList.remove('showing-result');
     els.modal.hidden = false;
     document.body.classList.add('modal-open');
     els.kilnView.hidden = false;
@@ -1563,6 +1644,7 @@
     const applied = Object.values(state.glaze).filter(Boolean);
     const glazeNames = [...new Set(applied.map(color => color.name))].join('、') || '无釉露胎';
     const finish = findFinish(state.firedFinishId);
+    els.modal.classList.add('showing-result');
     els.kilnView.hidden = true;
     els.resultView.hidden = false;
     els.resultCopy.textContent = state.temperature + '°C ' + (state.atmosphere === 'oxidation' ? '氧化烧' : '还原烧') + '，形成了' + finish.name + '釉面，并且可以从 360° 任意角度欣赏。';
@@ -1608,6 +1690,7 @@
     if (firingActive) return;
     if (firingTimeout) clearTimeout(firingTimeout);
     firingTimeout = null;
+    els.modal.classList.remove('showing-result');
     els.modal.hidden = true;
     document.body.classList.remove('modal-open');
     els.kilnView.hidden = false;
@@ -1680,6 +1763,7 @@
       button.classList.toggle('active', button === els.quarterViewBtn);
     });
     els.modal.hidden = true;
+    els.modal.classList.remove('showing-result');
     document.body.classList.remove('modal-open');
     els.resultAnglePicker.querySelectorAll('[data-export-angle]').forEach(button => {
       const active = button.dataset.exportAngle === 'side';
@@ -2043,6 +2127,7 @@
     els.quickWheelBtn.addEventListener('click', togglePower);
     els.leftDrawerCloseBtn.addEventListener('click', closeWorkshopDrawers);
     els.panelCloseBtn.addEventListener('click', closeWorkshopDrawers);
+    els.nextActionBtn.addEventListener('click', runNextAction);
     els.panelContent.addEventListener('click', handlePanelClick);
     els.panelContent.addEventListener('input', handlePanelInput);
     document.querySelectorAll('#viewModes [data-tool]').forEach(button => {
