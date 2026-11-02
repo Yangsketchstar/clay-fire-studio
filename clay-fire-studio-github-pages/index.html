@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#e8d7be" />
   <meta name="description" content="《泥火之间》是一款从空泥团开始，自由塑形、彩绘并烧制的 360° 网页陶艺创作游戏。" />
-  <title>泥火之间 2.5.4 · 自由陶艺工坊</title>
+  <title>泥火之间 2.6.0 · 手势陶单</title>
   <link rel="stylesheet" href="./assets/css/studio.css" />
 </head>
 <body class="immersive-ui">
@@ -15,12 +15,13 @@
       <div class="brand">
         <div class="brand-mark">泥</div>
         <div>
-          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.5.4 CREATIVE STUDIO</p>
+          <p class="eyebrow">HAND-BUILT CERAMIC STUDIO · 2.6.0 GESTURE COMMISSIONS</p>
           <h1>泥火之间 <span>沉浸工坊</span></h1>
         </div>
       </div>
       <div class="top-actions">
         <div class="live-pill" id="topHandStatus"><i></i><span>摄像头未开启</span></div>
+        <button class="ghost-btn" id="galleryBtn" type="button" title="查看我的陶架">陶架 <b id="galleryCount">0</b></button>
         <button class="ghost-btn" id="presentationBtn" type="button" title="课堂投屏">投屏</button>
         <button class="ghost-btn" id="backPhaseBtn" type="button" title="返回上一步">← 上一步</button>
         <button class="ghost-btn" id="resetBtn" type="button" title="重新开始">↻ 重新开始</button>
@@ -112,8 +113,19 @@
             </div>
           </div>
           <div class="studio-light" aria-hidden="true"></div>
+          <div class="order-rail" id="orderRail" aria-live="polite"></div>
+          <canvas id="orderGuideCanvas" class="order-guide-canvas" aria-hidden="true"></canvas>
           <canvas id="potteryCanvas" aria-label="360度陶器预览"></canvas>
           <canvas id="clayHandOverlay" class="clay-hand-overlay" aria-hidden="true"></canvas>
+          <aside class="gesture-coach" id="gestureCoach" hidden aria-live="polite">
+            <div class="gesture-coach-copy">
+              <span>手势速成</span>
+              <strong id="gestureCoachTitle">捏合陶土</strong>
+              <p id="gestureCoachCopy">张开手掌定位，拇指和食指捏合后拖动。</p>
+            </div>
+            <div class="gesture-coach-progress" aria-hidden="true"><i></i><i></i><i></i></div>
+            <button id="closeGestureCoachBtn" type="button" aria-label="关闭手势引导">×</button>
+          </aside>
           <div class="contact-feedback" id="contactFeedback" aria-live="polite">
             <div class="contact-ring" id="contactRing"></div>
             <div class="hand-hint hand-hint-left" id="handHintLeft"><span>左手</span></div>
@@ -245,6 +257,7 @@
         <p class="eyebrow">YOUR CERAMIC IS READY</p>
         <h2>作品出炉了</h2>
         <p class="result-copy" id="resultCopy">一件真正可以从正面、侧面和背面欣赏的手作陶器。</p>
+        <div class="result-score-card" id="resultScoreCard" hidden></div>
         <div class="result-art" id="resultArt"></div>
         <div class="result-specs" id="resultSpecs"></div>
         <div class="result-angle-picker" id="resultAnglePicker" aria-label="选择保存角度">
@@ -256,6 +269,22 @@
         <div class="result-actions">
           <button class="soft-btn" id="restartBtn" type="button">再做一个</button>
           <button class="save-btn" id="saveResultBtn" type="button">保存所选角度</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="galleryModal" hidden>
+    <div class="modal-card gallery-card">
+      <button class="modal-close" id="closeGalleryBtn" type="button" aria-label="关闭陶架">×</button>
+      <div class="gallery-view">
+        <p class="eyebrow">MY CERAMIC SHELF · LOCAL COLLECTION</p>
+        <h2>我的陶架</h2>
+        <p class="result-copy">最近完成的六件作品会保存在这台设备上。新作品会自动收进来。</p>
+        <div class="gallery-grid" id="galleryGrid"></div>
+        <div class="result-actions">
+          <button class="soft-btn" id="galleryNewPieceBtn" type="button">再做一件</button>
+          <button class="soft-btn" id="galleryCloseActionBtn" type="button">回到工坊</button>
         </div>
       </div>
     </div>

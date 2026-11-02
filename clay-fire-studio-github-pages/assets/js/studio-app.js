@@ -67,6 +67,19 @@
     smoothBtn: $('smoothBtn'),
     undoBtn: $('undoBtn'),
     redoBtn: $('redoBtn'),
+    galleryBtn: $('galleryBtn'),
+    galleryCount: $('galleryCount'),
+    galleryModal: $('galleryModal'),
+    galleryGrid: $('galleryGrid'),
+    closeGalleryBtn: $('closeGalleryBtn'),
+    galleryCloseActionBtn: $('galleryCloseActionBtn'),
+    galleryNewPieceBtn: $('galleryNewPieceBtn'),
+    orderRail: $('orderRail'),
+    orderGuideCanvas: $('orderGuideCanvas'),
+    gestureCoach: $('gestureCoach'),
+    gestureCoachTitle: $('gestureCoachTitle'),
+    gestureCoachCopy: $('gestureCoachCopy'),
+    closeGestureCoachBtn: $('closeGestureCoachBtn'),
     centerViewBtn: $('centerViewBtn'),
     quarterViewBtn: $('quarterViewBtn'),
     topViewBtn: $('topViewBtn'),
@@ -102,6 +115,7 @@
     kilnStatus: $('kilnStatus'),
     kilnProgress: $('kilnProgress'),
     resultCopy: $('resultCopy'),
+    resultScoreCard: $('resultScoreCard'),
     resultArt: $('resultArt'),
     resultSpecs: $('resultSpecs'),
     resultAnglePicker: $('resultAnglePicker'),
@@ -173,6 +187,9 @@
       firedFinishId: 'soft',
       exportAngle: 'side',
       finalized: false,
+      orderId: '',
+      orderChosen: false,
+      firingOutcome: null,
       history: [],
       redoHistory: []
     };
@@ -188,6 +205,8 @@
   let handActionFeedback = { text: '', until: 0 };
   let handDeformCooldown = 0;
   let resultExportCache = { angle: null, dataUrl: '' };
+  let galleryEntries = [];
+  let gestureGuide = { pinch: false, vertical: false, horizontal: false, dismissed: false };
   let lastJourneySignature = '';
   let firingTimer = null;
   let firingTimeout = null;
@@ -224,6 +243,49 @@
   }
   function currentFinish() {
     return findFinish(state.finalized ? state.firedFinishId : state.finishId);
+  }
+  function activeOrder() {
+    return D.ORDERS.find(order => order.id === state.orderId) || null;
+  }
+  function readLocalJson(key, fallback) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || 'null');
+      return value == null ? fallback : value;
+    } catch (error) {
+      return fallback;
+    }
+  }
+  function writeLocalJson(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+  function loadGallery() {
+    const stored = readLocalJson('clay-fire-gallery-v1', []);
+    galleryEntries = Array.isArray(stored)
+      ? stored.filter(entry => entry && entry.id && String(entry.thumbnail || '').startsWith('data:image/')).slice(0, 6)
+      : [];
+    updateGalleryCount();
+  }
+  function loadGestureGuide() {
+    const stored = readLocalJson('clay-fire-gesture-guide-v1', null);
+    if (stored && typeof stored === 'object') {
+      gestureGuide = {
+        pinch: !!stored.pinch,
+        vertical: !!stored.vertical,
+        horizontal: !!stored.horizontal,
+        dismissed: !!stored.dismissed
+      };
+    }
+  }
+  function persistGestureGuide() {
+    writeLocalJson('clay-fire-gesture-guide-v1', gestureGuide);
+  }
+  function updateGalleryCount() {
+    if (els.galleryCount) els.galleryCount.textContent = String(galleryEntries.length);
   }
 
   function rendererState() {
@@ -634,7 +696,14 @@
       return { title: '泥料已经准备好', copy: '现在进入自由手捏，开始决定器物的轮廓。', label: '开始手捏', action: 'go-sculpt', disabled: false };
     }
     if (state.phase === 'sculpt') {
-      return { title: '捏出你想要的器型', copy: '上下改变高度，左右调整器壁，满意后进入修边。', label: '我捏好了，下一步', action: 'go-dry', disabled: false };
+      const order = activeOrder();
+      return {
+        title: order ? '把《' + order.title + '》捏出来' : '捏出你想要的器型',
+        copy: order ? order.challenge + ' · 虚线只作方向参考' : '上下改变高度，左右调整器壁，满意后进入修边。',
+        label: '我捏好了，下一步',
+        action: 'go-dry',
+        disabled: false
+      };
     }
     if (state.phase === 'dry') {
       if (dryTimer) {
@@ -697,6 +766,7 @@
   function renderAll() {
     const meta = phaseMeta();
     document.body.dataset.phase = state.phase;
+    document.body.classList.toggle('order-unselected', !state.orderChosen && (state.phase === 'clay' || state.phase === 'sculpt'));
     els.stageEyebrow.textContent = meta[0];
     els.panelEyebrow.textContent = meta[0];
     els.stageTitle.textContent = meta[1];
@@ -750,6 +820,8 @@
     renderSamples();
     renderPanel();
     syncRenderer();
+    renderOrderRail();
+    renderGestureCoach();
   }
 
   function renderClayOptions() {
@@ -816,6 +888,203 @@
     state.handleCount = 0;
     renderSamples();
     toast(sample.name + '已记为灵感参考；陶坯仍需从泥团开始由你亲手塑形');
+  }
+
+  function drawOrderPreview(canvas, order) {
+    const sample = D.PROFILE_SAMPLES[order.targetSample];
+    if (!sample) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width = 86;
+    const height = canvas.height = 72;
+    ctx.clearRect(0, 0, width, height);
+    const profile = D.expandProfile(sample);
+    const max = Math.max(...profile);
+    const left = [];
+    const right = [];
+    for (let i = 0; i < profile.length; i += 3) {
+      const t = i / (profile.length - 1);
+      const y = 6 + t * height * .84;
+      const radius = profile[i] / max * 25;
+      left.push([width / 2 - radius, y]);
+      right.push([width / 2 + radius, y]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(left[0][0], left[0][1]);
+    left.slice(1).forEach(point => ctx.lineTo(point[0], point[1]));
+    for (let i = right.length - 1; i >= 0; i -= 1) ctx.lineTo(right[i][0], right[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = order.accent + '22';
+    ctx.fill();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = order.accent;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+
+  function orderChoiceMarkup() {
+    return (
+      '<div class="order-rail-heading"><div><span>今日陶单</span><strong>先选一个想做的理由</strong></div><small>只给方向，不套模板</small></div>' +
+      '<div class="order-choice-grid">' +
+        D.ORDERS.map(order => (
+          '<button class="order-choice" data-order-choice="' + order.id + '" type="button" style="--order-accent:' + order.accent + '">' +
+            '<canvas aria-hidden="true"></canvas>' +
+            '<span><b>' + order.title + '</b><small>' + order.shapeLabel + '</small></span>' +
+          '</button>'
+        )).join('') +
+        '<button class="order-choice order-choice-free" data-order-choice="free" type="button">' +
+          '<i>∞</i><span><b>自由创作</b><small>没有订单，随手做一件</small></span>' +
+        '</button>' +
+      '</div>'
+    );
+  }
+
+  function currentOrderMarkup() {
+    const order = activeOrder();
+    if (!order) {
+      return (
+        '<div class="order-current order-current-free"><i>∞</i><div><span>自由创作</span><strong>这一件只听从你的手</strong><small>完成本烧后仍会进入陶架。</small></div><button data-order-change="true" type="button">选张陶单</button></div>'
+      );
+    }
+    return (
+      '<div class="order-current" style="--order-accent:' + order.accent + '">' +
+        '<i>' + order.seal + '</i>' +
+        '<div><span>' + order.client + '</span><strong>' + order.title + '</strong><small>' + order.challenge + '</small></div>' +
+        '<button data-order-change="true" type="button">换陶单</button>' +
+      '</div>'
+    );
+  }
+
+  function renderOrderRail() {
+    if (!els.orderRail) return;
+    const visible = state.phase === 'clay' || state.phase === 'sculpt';
+    els.orderRail.hidden = !visible;
+    if (!visible) {
+      clearOrderGuide();
+      return;
+    }
+    els.orderRail.innerHTML = state.orderChosen ? currentOrderMarkup() : orderChoiceMarkup();
+    if (!state.orderChosen) {
+      els.orderRail.querySelectorAll('[data-order-choice]').forEach(button => {
+        const order = D.ORDERS.find(item => item.id === button.dataset.orderChoice);
+        if (order) drawOrderPreview(button.querySelector('canvas'), order);
+      });
+    }
+    drawOrderGuide();
+  }
+
+  function chooseOrder(id) {
+    if (id === 'free') {
+      state.orderId = '';
+      state.orderChosen = true;
+      toast('已进入自由创作：没有订单要求，做一件只属于你的器物');
+    } else if (D.ORDERS.some(order => order.id === id)) {
+      state.orderId = id;
+      state.orderChosen = true;
+      const order = activeOrder();
+      toast('接下了《' + order.title + '》：' + order.challenge);
+    }
+    renderAll();
+  }
+
+  function resetOrderChoice() {
+    state.orderId = '';
+    state.orderChosen = false;
+    renderAll();
+  }
+
+  function clearOrderGuide() {
+    if (!els.orderGuideCanvas) return;
+    const ctx = els.orderGuideCanvas.getContext('2d');
+    ctx.clearRect(0, 0, els.orderGuideCanvas.width, els.orderGuideCanvas.height);
+  }
+
+  function drawOrderGuide() {
+    if (!els.orderGuideCanvas) return;
+    const canvas = els.orderGuideCanvas;
+    const order = activeOrder();
+    if (!order || state.phase !== 'sculpt') {
+      clearOrderGuide();
+      return;
+    }
+    const width = canvas.clientWidth || canvas.parentElement.clientWidth;
+    const height = canvas.clientHeight || canvas.parentElement.clientHeight;
+    if (!width || !height) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const pixelWidth = Math.round(width * ratio);
+    const pixelHeight = Math.round(height * ratio);
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const geometry = renderer.geometry();
+    const target = D.expandProfile(D.PROFILE_SAMPLES[order.targetSample]);
+    const max = Math.max(...target);
+    if (!target.length || !max) return;
+    const centerX = geometry.cx;
+    const centerY = geometry.cy;
+    const span = geometry.span * Math.cos(renderer.pitch);
+    const left = [];
+    const right = [];
+    for (let i = 0; i < target.length; i += 2) {
+      const t = i / (target.length - 1);
+      const radius = geometry.radiusScale * (target[i] / max) * .94;
+      const y = centerY + (t - .5) * span;
+      left.push([centerX - radius, y]);
+      right.push([centerX + radius, y]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(left[0][0], left[0][1]);
+    left.slice(1).forEach(point => ctx.lineTo(point[0], point[1]));
+    for (let i = right.length - 1; i >= 0; i -= 1) ctx.lineTo(right[i][0], right[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = order.accent + '12';
+    ctx.fill();
+    ctx.setLineDash([7, 7]);
+    ctx.strokeStyle = order.accent + 'bb';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = order.accent;
+    ctx.font = '600 11px "Microsoft YaHei", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(order.title + ' · 参考轮廓', centerX, Math.max(18, centerY - span * .58));
+  }
+
+  function renderGestureCoach() {
+    if (!els.gestureCoach) return;
+    const guidedPhase = state.phase === 'sculpt';
+    const completed = gestureGuide.pinch && gestureGuide.vertical && gestureGuide.horizontal;
+    els.gestureCoach.hidden = !guidedPhase || completed || gestureGuide.dismissed;
+    els.gestureCoach.querySelectorAll('.gesture-coach-progress i').forEach((dot, index) => {
+      dot.classList.toggle('done', [
+        gestureGuide.pinch,
+        gestureGuide.vertical,
+        gestureGuide.horizontal
+      ][index]);
+    });
+    if (!gestureGuide.pinch) {
+      els.gestureCoachTitle.textContent = '捏合陶土';
+      els.gestureCoachCopy.textContent = '张开手掌定位，拇指和食指捏合后拖动；鼠标按住陶土也可以。';
+    } else if (!gestureGuide.vertical) {
+      els.gestureCoachTitle.textContent = '上下提压';
+      els.gestureCoachCopy.textContent = '捏住后向上提会升高，向下压会降低。每次动作后回到中间可以继续。';
+    } else if (!gestureGuide.horizontal) {
+      els.gestureCoachTitle.textContent = '左右塑形';
+      els.gestureCoachCopy.textContent = '捏住后左右拖动，让局部器壁外扩或收窄。两只手一起动更有拉坯感。';
+    } else {
+      els.gestureCoachTitle.textContent = '手势已经熟练';
+      els.gestureCoachCopy.textContent = '接下来只管把轮廓做得像你想要的样子。';
+    }
+  }
+
+  function markGestureGuide(task) {
+    if (!task || gestureGuide[task] || gestureGuide.dismissed) return;
+    gestureGuide[task] = true;
+    persistGestureGuide();
+    renderGestureCoach();
   }
 
   const regionNames = { body: '器身', rim: '口沿', inside: '内壁', foot: '底足' };
@@ -1020,7 +1289,9 @@
       '</div>' +
       '<div class="section-title"><h3>窑内气氛</h3><span>影响颜色与火痕</span></div>' +
       '<div class="atmosphere-row"><button class="' + (state.atmosphere === 'oxidation' ? 'selected' : '') + '" data-action="atmosphere" data-atmosphere="oxidation" type="button">氧化烧 · 清透</button><button class="' + (state.atmosphere === 'reduction' ? 'selected' : '') + '" data-action="atmosphere" data-atmosphere="reduction" type="button">还原烧 · 深沉</button></div>' +
-      '<div class="firing-summary"><div><span>器型</span><strong>' + pieceName() + '</strong></div><div><span>温度</span><strong>' + state.temperature + '°C</strong></div><div><span>气氛</span><strong>' + (state.atmosphere === 'oxidation' ? '氧化' : '还原') + '</strong></div></div>' +
+      '<div class="firing-summary">' +
+        (activeOrder() ? '<div><span>当前陶单</span><strong>' + activeOrder().title + '</strong></div>' : '') +
+        '<div><span>器型</span><strong>' + pieceName() + '</strong></div><div><span>温度</span><strong>' + state.temperature + '°C</strong></div><div><span>气氛</span><strong>' + (state.atmosphere === 'oxidation' ? '氧化' : '还原') + '</strong></div></div>' +
       '<div class="effect-list">' + effects.map(effect => '<span>' + effect + '</span>').join('') + '</div>' +
       '<div class="action-row"><button class="secondary" data-action="back-decorate" type="button">返回调整</button><button class="primary" data-action="start-fire" type="button">开始本烧 →</button></div>'
     );
@@ -1221,6 +1492,7 @@
     } else {
       if (justStarted) {
         pushHistory('捏合塑形');
+        markGestureGuide('pinch');
         workingHits.forEach(item => {
           deformLocal(item.uv.v, item.uv.angle, -.04 * (0.65 + pressure * .35) * deformationScale);
         });
@@ -1238,6 +1510,7 @@
           else horizontalReady = false;
         }
         if (horizontalReady) {
+          markGestureGuide('horizontal');
           const horizontalStep = horizontalTravel > 0 ? .045 : -.045;
           workingHits.forEach(item => {
             deformLocal(item.uv.v, item.uv.angle, horizontalStep * deformationScale);
@@ -1249,6 +1522,7 @@
           pulseContact();
           syncRenderer();
         } else if (verticalReady) {
+          markGestureGuide('vertical');
           const step = verticalTravel > 0 ? -.075 : .075;
           state.heightFactor = clamp(state.heightFactor + step * deformationScale, .62, 1.02);
           state.shapeWork = clamp((state.shapeWork || 0) + .04, 0, 1);
@@ -1580,6 +1854,7 @@
     document.body.classList.add('modal-open');
     els.kilnView.hidden = false;
     els.resultView.hidden = true;
+    if (els.resultScoreCard) els.resultScoreCard.hidden = true;
     els.closeModalBtn.disabled = true;
     els.kilnProgress.style.width = '0%';
     els.kilnTemp.textContent = '20';
@@ -1640,14 +1915,210 @@
     firingTimeout = setTimeout(showResult, 650);
   }
 
+  function normalizedProfile(profile) {
+    const max = Math.max(.001, ...profile);
+    return profile.map(radius => radius / max);
+  }
+
+  function orderShapeScore(order) {
+    if (!order) {
+      const profile = state.profile;
+      let variation = 0;
+      for (let i = 1; i < profile.length - 1; i += 1) {
+        variation += Math.abs(profile[i - 1] - profile[i] * 2 + profile[i + 1]);
+      }
+      const grace = 1 - clamp(variation / Math.max(.1, profile.length * .018), 0, 1);
+      return Math.round(58 + grace * 34 + clamp(state.lumps.length / 18, 0, 1) * 8);
+    }
+    const targetSample = D.PROFILE_SAMPLES[order.targetSample] || customSample;
+    const target = normalizedProfile(D.expandProfile(targetSample));
+    const current = normalizedProfile(state.profile);
+    let squaredError = 0;
+    const samples = Math.min(32, current.length);
+    for (let i = 0; i < samples; i += 1) {
+      const index = Math.round(i / Math.max(1, samples - 1) * (current.length - 1));
+      const targetIndex = Math.round(i / Math.max(1, samples - 1) * (target.length - 1));
+      squaredError += Math.pow(current[index] - target[targetIndex], 2);
+    }
+    const distance = Math.sqrt(squaredError / samples);
+    const silhouette = clamp(1 - distance / .29, 0, 1);
+    const preferredHeight = { mug: .73, roundVase: .88, plate: .64 }[order.targetSample] || .76;
+    const heightFit = clamp(1 - Math.abs(state.heightFactor - preferredHeight) / .24, 0, 1);
+    return Math.round(clamp(100 * (silhouette * .7 + heightFit * .3), 0, 100));
+  }
+
+  function buildFiringOutcome() {
+    const order = activeOrder();
+    const applied = Object.values(state.glaze).filter(Boolean);
+    const presetIds = applied.map(color => color.presetId).filter(Boolean);
+    const preferredGlaze = !order || presetIds.some(id => order.preferredPresets.includes(id));
+    const coverage = Object.keys(state.glaze).filter(region => state.glaze[region]).length / 4;
+    let formScore = orderShapeScore(order);
+    let surfaceScore = Math.round(clamp(12 + coverage * 58 + (preferredGlaze ? 24 : 4) + state.gloss * 6, 0, 100));
+    let fireScore = 48;
+    if (order) {
+      const nearestTemperature = Math.min(...order.preferredTemperatures.map(value => Math.abs(value - state.temperature)));
+      const temperatureFit = clamp(1 - nearestTemperature / 180, 0, 1);
+      const atmosphereFit = state.atmosphere === order.preferredAtmosphere ? 1 : 0;
+      fireScore = Math.round(clamp(35 + temperatureFit * 38 + atmosphereFit * 18 + state.gloss * 9, 0, 100));
+    } else {
+      fireScore = Math.round(clamp(48 + (state.temperature >= 1240 ? 18 : 8) + (preferredGlaze ? 10 : 0) + state.gloss * 12, 0, 100));
+    }
+    const total = Math.round(clamp(formScore * .45 + surfaceScore * .25 + fireScore * .3, 0, 100));
+    let outcomeLabel = '大胆留痕';
+    let title = '窑火留下了它自己的主意';
+    let accent = '#a76a58';
+    if (total >= 82) {
+      outcomeLabel = '窑火惊喜';
+      title = '这一件，比想象中更像作品';
+      accent = '#688d7c';
+    } else if (total >= 64) {
+      outcomeLabel = '顺利出窑';
+      title = '稳稳落在手里的手作感';
+      accent = '#a67954';
+    }
+    const notes = [];
+    if (formScore >= 78) notes.push('轮廓很有自己的精神。');
+    else if (formScore >= 58) notes.push('器形还不够稳定，但手的痕迹很真诚。');
+    else notes.push('这一件走得很自由，轮廓和陶单相差较远。');
+    if (surfaceScore >= 76) notes.push('釉层完整，颜色把器身托了起来。');
+    else if (surfaceScore >= 52) notes.push('釉色已经成形，再多照顾一点边缘会更完整。');
+    else notes.push('露胎和薄釉留下了朴素的手作感。');
+    if (fireScore >= 78) notes.push('火候正好，釉面有了自己的表情。');
+    else if (fireScore >= 56) notes.push('火候还有一点偏差，也让结果更不可复制。');
+    else notes.push('火候有些大胆，这次结果更像一次实验。');
+    if (order && preferredGlaze) notes.push(order.client + '很喜欢你选的釉色方向。');
+    return {
+      formScore,
+      surfaceScore,
+      fireScore,
+      total,
+      outcomeLabel,
+      title,
+      accent,
+      note: notes.slice(0, 3).join(' '),
+      orderId: order ? order.id : '',
+      orderTitle: order ? order.title : '自由创作',
+      orderClient: order ? order.client : '自由创作',
+      challenge: order ? order.challenge : '没有要求，只有你的手',
+      glazeNames: [...new Set(applied.map(color => color.name))].join('、') || '无釉露胎'
+    };
+  }
+
+  function renderResultScore() {
+    const outcome = state.firingOutcome;
+    if (!outcome || !els.resultScoreCard) return;
+    els.resultScoreCard.hidden = false;
+    els.resultScoreCard.innerHTML =
+      '<div class="result-score-main" style="--score-accent:' + outcome.accent + '">' +
+        '<span>' + outcome.outcomeLabel + '</span><strong>' + outcome.total + '</strong><small>/ 100</small>' +
+      '</div>' +
+      '<div class="result-score-body">' +
+        '<b>' + outcome.title + '</b>' +
+        '<p>' + outcome.note + '</p>' +
+        '<div class="result-score-metrics">' +
+          '<span><i>器形</i><b>' + outcome.formScore + '</b></span>' +
+          '<span><i>釉面</i><b>' + outcome.surfaceScore + '</b></span>' +
+          '<span><i>烧成</i><b>' + outcome.fireScore + '</b></span>' +
+        '</div>' +
+        '<small>' + outcome.orderClient + ' · ' + outcome.challenge + '</small>' +
+      '</div>';
+  }
+
+  function makeGalleryThumbnail(dataUrl) {
+    return new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 420;
+        canvas.height = 420;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f5ead8';
+        ctx.fillRect(0, 0, 420, 420);
+        const scale = Math.min(396 / image.width, 396 / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        ctx.drawImage(image, (420 - width) / 2, (420 - height) / 2, width, height);
+        resolve(canvas.toDataURL('image/jpeg', .82));
+      };
+      image.onerror = () => resolve('');
+      image.src = dataUrl;
+    });
+  }
+
+  async function saveGalleryEntry() {
+    if (!state.firingOutcome || !resultExportCache.dataUrl) return;
+    const thumbnail = await makeGalleryThumbnail(resultExportCache.dataUrl);
+    if (!thumbnail) {
+      toast('作品已经完成，但浏览器没有足够的本地空间保存到陶架');
+      return;
+    }
+    const entry = {
+      id: 'piece-' + Date.now(),
+      createdAt: new Date().toISOString(),
+      thumbnail,
+      orderTitle: state.firingOutcome.orderTitle,
+      orderClient: state.firingOutcome.orderClient,
+      score: state.firingOutcome.total,
+      outcomeLabel: state.firingOutcome.outcomeLabel,
+      title: state.firingOutcome.title,
+      finish: currentFinish().name,
+      glazeNames: state.firingOutcome.glazeNames
+    };
+    const existingIndex = galleryEntries.findIndex(item => item.signature === entry.id);
+    if (existingIndex < 0) galleryEntries = [entry, ...galleryEntries].slice(0, 6);
+    const saved = writeLocalJson('clay-fire-gallery-v1', galleryEntries);
+    updateGalleryCount();
+    if (!saved) toast('作品可以保存 PNG，但浏览器的本地陶架空间已满');
+  }
+
+  function renderGallery() {
+    if (!els.galleryGrid) return;
+    if (!galleryEntries.length) {
+      els.galleryGrid.innerHTML = '<div class="gallery-empty"><i>陶</i><strong>陶架还是空的</strong><p>完成一次本烧后，作品会自动收进这里。</p></div>';
+      return;
+    }
+    els.galleryGrid.innerHTML = galleryEntries.map(entry => {
+      const date = new Date(entry.createdAt);
+      const dateLabel = Number.isNaN(date.getTime())
+        ? ''
+        : (date.getMonth() + 1) + '月' + date.getDate() + '日';
+      return (
+        '<article class="gallery-piece">' +
+          '<img src="' + entry.thumbnail + '" alt="' + entry.orderTitle + '作品缩略图"/>' +
+          '<div class="gallery-piece-copy"><span>' + entry.orderClient + ' · ' + dateLabel + '</span><strong>' + entry.orderTitle + '</strong><small>' + entry.title + '</small>' +
+            '<div><em>' + entry.outcomeLabel + '</em><b>' + entry.score + '</b></div>' +
+          '</div>' +
+          '<button data-gallery-remove="' + entry.id + '" type="button" aria-label="从陶架移除">×</button>' +
+        '</article>'
+      );
+    }).join('');
+  }
+
+  function openGallery() {
+    if (!els.galleryModal) return;
+    renderGallery();
+    els.galleryModal.hidden = false;
+    document.body.classList.add('modal-open');
+  }
+
+  function closeGallery() {
+    if (!els.galleryModal) return;
+    els.galleryModal.hidden = true;
+    if (els.modal.hidden) document.body.classList.remove('modal-open');
+  }
+
   function showResult() {
     const applied = Object.values(state.glaze).filter(Boolean);
     const glazeNames = [...new Set(applied.map(color => color.name))].join('、') || '无釉露胎';
     const finish = findFinish(state.firedFinishId);
+    state.firingOutcome = buildFiringOutcome();
     els.modal.classList.add('showing-result');
     els.kilnView.hidden = true;
     els.resultView.hidden = false;
-    els.resultCopy.textContent = state.temperature + '°C ' + (state.atmosphere === 'oxidation' ? '氧化烧' : '还原烧') + '，形成了' + finish.name + '釉面，并且可以从 360° 任意角度欣赏。';
+    els.resultCopy.textContent = state.firingOutcome.orderClient + '的《' + state.firingOutcome.orderTitle + '》：' +
+      state.temperature + '°C ' + (state.atmosphere === 'oxidation' ? '氧化烧' : '还原烧') +
+      '，形成了' + finish.name + '釉面。' + state.firingOutcome.note;
     els.resultSpecs.innerHTML = [
       pieceName(),
       state.temperature + '°C',
@@ -1657,6 +2128,8 @@
       glazeNames
     ].map(text => '<span>' + text + '</span>').join('');
     setResultAngle(state.exportAngle || 'side');
+    renderResultScore();
+    saveGalleryEntry();
   }
 
   function resultViewAngles(angle) {
@@ -1764,6 +2237,8 @@
     });
     els.modal.hidden = true;
     els.modal.classList.remove('showing-result');
+    els.resultScoreCard.hidden = true;
+    if (els.galleryModal) els.galleryModal.hidden = true;
     document.body.classList.remove('modal-open');
     els.resultAnglePicker.querySelectorAll('[data-export-angle]').forEach(button => {
       const active = button.dataset.exportAngle === 'side';
@@ -1939,7 +2414,10 @@
         setContactVisible(false);
         return;
       }
-      if (state.phase === 'sculpt') pushHistory('局部塑形');
+      if (state.phase === 'sculpt') {
+        pushHistory('局部塑形');
+        markGestureGuide('pinch');
+      }
       sculptDrag = { mode: 'sculpt', lastX: point.x, lastY: point.y, uv, moved: 0 };
       return;
     }
@@ -2006,6 +2484,10 @@
       const dy = point.y - sculptDrag.lastY;
       sculptDrag.moved += Math.abs(dx) + Math.abs(dy);
       if (Math.abs(dx) > .4 || Math.abs(dy) > .4) {
+        if (state.phase === 'sculpt') {
+          if (Math.abs(dx) > Math.abs(dy) * .72) markGestureGuide('horizontal');
+          if (Math.abs(dy) > Math.abs(dx) * .72) markGestureGuide('vertical');
+        }
         const uv = renderer.screenToUv(point.x, point.y);
         if (uv.hit) sculptDrag.uv = uv;
         const activeUv = sculptDrag.uv;
@@ -2125,6 +2607,38 @@
       setWorkshopDrawer(document.body.classList.contains('panel-open') ? null : 'panel');
     });
     els.quickWheelBtn.addEventListener('click', togglePower);
+    els.galleryBtn.addEventListener('click', openGallery);
+    els.closeGalleryBtn.addEventListener('click', closeGallery);
+    els.galleryCloseActionBtn.addEventListener('click', closeGallery);
+    els.galleryNewPieceBtn.addEventListener('click', () => {
+      closeGallery();
+      resetGame(true);
+    });
+    els.galleryGrid.addEventListener('click', event => {
+      const button = event.target.closest('[data-gallery-remove]');
+      if (!button) return;
+      galleryEntries = galleryEntries.filter(entry => entry.id !== button.dataset.galleryRemove);
+      writeLocalJson('clay-fire-gallery-v1', galleryEntries);
+      updateGalleryCount();
+      renderGallery();
+      toast('作品已从陶架移除');
+    });
+    els.galleryModal.addEventListener('click', event => {
+      if (event.target === els.galleryModal) closeGallery();
+    });
+    els.orderRail.addEventListener('click', event => {
+      const choice = event.target.closest('[data-order-choice]');
+      if (choice) {
+        chooseOrder(choice.dataset.orderChoice);
+        return;
+      }
+      if (event.target.closest('[data-order-change]')) resetOrderChoice();
+    });
+    els.closeGestureCoachBtn.addEventListener('click', () => {
+      gestureGuide.dismissed = true;
+      persistGestureGuide();
+      renderGestureCoach();
+    });
     els.leftDrawerCloseBtn.addEventListener('click', closeWorkshopDrawers);
     els.panelCloseBtn.addEventListener('click', closeWorkshopDrawers);
     els.nextActionBtn.addEventListener('click', runNextAction);
@@ -2167,7 +2681,8 @@
     els.closeModalBtn.addEventListener('click', closeModal);
     els.modal.addEventListener('click', event => { if (event.target === els.modal) closeModal(); });
     document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && !els.modal.hidden) closeModal();
+      if (event.key === 'Escape' && !els.galleryModal.hidden) closeGallery();
+      else if (event.key === 'Escape' && !els.modal.hidden) closeModal();
       else if (event.key === 'Escape' && (document.body.classList.contains('materials-open') || document.body.classList.contains('panel-open'))) {
         closeWorkshopDrawers();
       }
@@ -2190,7 +2705,10 @@
       renderer.rotateBy(event.deltaY * .0018);
     }, { passive: false });
     els.potteryCanvas.addEventListener('contextmenu', event => event.preventDefault());
-    window.addEventListener('resize', clearClayHandOverlay);
+    window.addEventListener('resize', () => {
+      clearClayHandOverlay();
+      drawOrderGuide();
+    });
     els.phases.forEach(button => {
       button.addEventListener('click', () => {
         const targetIndex = phaseOrder.indexOf(button.dataset.phase);
@@ -2200,8 +2718,11 @@
     });
   }
 
+  loadGallery();
+  loadGestureGuide();
   bindEvents();
   renderAll();
+  setInterval(drawOrderGuide, 180);
   setInterval(() => {
     const degrees = ((renderer.rotation * 180 / Math.PI) % 360 + 360) % 360;
     const pitch = Math.round(renderer.pitch * 180 / Math.PI);

@@ -103,6 +103,51 @@
     widePlanter: { name: '长方花盆', group: '花盆', note: '宽口浅盆', keys: [[0,.97],[.08,.98],[.4,.88],[.72,.72],[.94,.58],[1,.54]], facets: 4 }
   };
 
+  const ORDERS = [
+    {
+      id: 'tea-cup',
+      title: '茶桌小杯',
+      client: '茶客阿砚',
+      seal: '茶',
+      accent: '#839b84',
+      targetSample: 'mug',
+      shapeLabel: '微收腰小杯',
+      preferredPresets: ['celadon-clear', 'tea-dust', 'moon-white'],
+      preferredTemperatures: [1100, 1240],
+      preferredAtmosphere: 'oxidation',
+      challenge: '杯口匀净，留住一圈手作纹',
+      copy: '不必做得一模一样。小手杯握在掌心里舒服，弧线有一点自己的起伏更好。'
+    },
+    {
+      id: 'flower-vase',
+      title: '一枝花小瓶',
+      client: '花枝工作室',
+      seal: '花',
+      accent: '#7194a3',
+      targetSample: 'roundVase',
+      shapeLabel: '圆腹收颈瓶',
+      preferredPresets: ['sea-salt', 'moon-white', 'dusk-gradient'],
+      preferredTemperatures: [1240, 1280],
+      preferredAtmosphere: 'reduction',
+      challenge: '腹部圆润，颈部轻巧',
+      copy: '只插一枝花的小瓶。圆腹和细颈不必精确，但轮廓要像一口气提上来的。'
+    },
+    {
+      id: 'star-dish',
+      title: '星夜小碟',
+      client: '守夜人',
+      seal: '星',
+      accent: '#66708f',
+      targetSample: 'plate',
+      shapeLabel: '低矮浅口碟',
+      preferredPresets: ['star-sea', 'blue-drip', 'night-crackle'],
+      preferredTemperatures: [1240, 1280],
+      preferredAtmosphere: 'reduction',
+      challenge: '低矮舒展，让釉色像夜空',
+      copy: '一件放月光、钥匙或小点心的碟子。轮廓越舒展，烧出来的釉色越有余地。'
+    }
+  ];
+
   const STAMP_CATEGORIES = ['卡通形象', '自然叶片', '传统纹样', '可爱元素', '印章纹饰'];
 
   function line(ctx, s, points, color, width) {
@@ -176,5 +221,5 @@
     return points;
   }
 
-  window.StudioData = { CLAYS, COLORS, GLAZE_CATEGORIES, GLAZE_PRESETS, FINISHES, TEXTURES, PROFILE_SAMPLES, STAMP_CATEGORIES, STAMPS, expandProfile };
+  window.StudioData = { CLAYS, COLORS, GLAZE_CATEGORIES, GLAZE_PRESETS, FINISHES, TEXTURES, PROFILE_SAMPLES, ORDERS, STAMP_CATEGORIES, STAMPS, expandProfile };
 })();
